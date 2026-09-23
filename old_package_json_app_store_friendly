@@ -1,0 +1,121 @@
+{
+  "name": "ove-electron",
+  "version": "1.4.3",
+  "description": "An open source vector or plasmid editor",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron . ./pA11990.gb",
+    "test": "mocha",
+    "build": "env-cmd electron-builder -wml --publish never",
+    "build-win": "env-cmd electron-builder --win --publish never",
+    "build-mac": "env-cmd electron-builder --mac --publish never",
+    "deploy": "env-cmd electron-builder --mac --linux --publish always",
+    "deploy-win": "electron-builder --win --publish always",
+    "deploy-mac": "env-cmd electron-builder --mac --publish always",
+    "deploy-linux": "env-cmd electron-builder --linux --publish always",
+    "generateChangelog": "auto-changelog -p && git add . && git commit -m 'Updating CHANGELOG' && git push"
+  },
+  "build": {
+    "appx": {
+      "identityName": "56560Teselagen.OpenVectorEditor",
+      "publisher": "CN=D373F92F-3481-433F-9DC5-0BE55DE5500D",
+      "publisherDisplayName": "Teselagen",
+      "applicationId": "OpenVectorEditor",
+      "displayName": "OpenVectorEditor"
+    },
+    "win": {
+      "target": "appx"
+    },
+    "productName": "OpenVectorEditor",
+    "publish": {
+      "provider": "github",
+      "repo": "ove-electron",
+      "owner": "tnrich"
+    },
+    "afterSign": "src/misc/notarize.js",
+    "mac": {
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "target": {
+        "target": "default",
+        "arch": [
+          "x64",
+          "arm64"
+        ]
+      },
+      "entitlements": "src/misc/entitlements.mac.plist",
+      "entitlementsInherit": "src/misc/entitlements.mac.plist"
+    },
+    "appId": "com.teselagen.openVectorEditor",
+    "fileAssociations": [
+      {
+        "ext": "json"
+      },
+      {
+        "ext": "gb"
+      },
+      {
+        "ext": "dna"
+      },
+      {
+        "ext": "gbk"
+      },
+      {
+        "ext": "gp"
+      },
+      {
+        "ext": "fas"
+      },
+      {
+        "ext": "fasta"
+      },
+      {
+        "ext": "fa"
+      },
+      {
+        "ext": "fna"
+      },
+      {
+        "ext": "ffn"
+      },
+      {
+        "ext": "gff"
+      },
+      {
+        "ext": "gff3"
+      }
+    ]
+  },
+  "repository": "https://github.com/electron/ove-electron",
+  "keywords": [
+    "Electron",
+    "open-vector-editor",
+    "plasmid",
+    "editor",
+    "dna",
+    "ove"
+  ],
+  "author": "tnrich",
+  "license": "MIT",
+  "devDependencies": {
+    "auto-changelog": "^2.4.0",
+    "electron": "^21.1.0",
+    "electron-builder": "^23.6.0",
+    "electron-notarize": "^1.2.1",
+    "env-cmd": "^10.1.0",
+    "eslint": "^8.24.0",
+    "eslint-config-teselagen": "^6.0.6",
+    "mocha": "^10.0.0",
+    "spectron": "^19.0.0"
+  },
+  "dependencies": {
+    "bio-parsers": "^8.3.32",
+    "electron-updater": "^5.3.0",
+    "electron-window-state": "^5.0.3",
+    "open-vector-editor": "^18.1.37",
+    "ove-auto-annotate": "^0.0.5",
+    "querystring": "^0.2.1",
+    "ve-range-utils": "^2.6.6",
+    "ve-sequence-utils": "^5.1.38"
+  }
+}
