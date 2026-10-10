@@ -37,6 +37,16 @@ const patches = [
     to: 'className: "alignmentViewBackButton"\n    })), window.oveRenderMismatchNav ? window.oveRenderMismatchNav(react_default.a, _this4) : null, ',
   },
   {
+    name: "alignment feature labels shown by default",
+    from: "  alignmentAnnotationLabelVisibility: {\n    features: false,",
+    to: "  alignmentAnnotationLabelVisibility: {\n    features: true,",
+  },
+  {
+    name: "pairwise alignment feature labels shown by default",
+    from: "  pairwise_alignmentAnnotationLabelVisibility: {\n    features: false,",
+    to: "  pairwise_alignmentAnnotationLabelVisibility: {\n    features: true,",
+  },
+  {
     name: "alignment tool note reflects the built-in local aligner",
     from: "Note: This tool requires an alignment server to be hooked up for it to work properly. It will NOT work in the OVE demo page.",
     to: "Alignments run locally on this computer (no server needed). Tip: add .ab1 files, tick \\\"Align Sequencing Reads to Reference Sequence\\\" and optionally \\\"Auto-Trim\\\".",

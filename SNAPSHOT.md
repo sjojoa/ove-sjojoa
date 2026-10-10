@@ -1,12 +1,12 @@
-# Snapshot: the app as it stood on 2026-09-23
+# Snapshot: the app as it stood on 2026-10-09
 
-Recovered from `OpenVectorEditor_2026-09-23.zip`, a backup of the built
+Recovered from `OpenVectorEditor_2026-10-09.zip`, a backup of the built
 `OpenVectorEditor.app` taken before this repository existed. The repository's
 first commit is 2026-11-04, so this code was in no commit, tag or release; it
 was extracted from the app bundle's `app.asar` so that the backup zips could be
 deleted without losing it.
 
-`package.json` says 1.5.5. `node_modules` is deliberately not committed: this
+`package.json` says 1.5.5 as well, though the code differs from the September snapshot (it adds src/alignment/alignmentSettings.js and carries seven patches). `node_modules` is deliberately not committed: this
 build already applied its upstream fixes through `scripts/patch-ove.js` (five of
 them) against the same pinned `open-vector-editor@18.3.6`, so the tree is
 reproducible with `yarn install`.

@@ -149,6 +149,19 @@ details.ove-cl-details summary {
   row-gap: 4px;
   height: auto !important;
 }
+.ove-align-nav {
+  flex-wrap: wrap;
+}
+.ove-mismatch-info {
+  flex-basis: 100%;
+  font-size: 12px;
+  padding: 2px 4px 0;
+  white-space: normal;
+  color: #106ba3;
+}
+.bp3-dark .ove-mismatch-info {
+  color: #48aff0;
+}
 .ove-align-nav .ove-align-pos {
   font-size: 11px;
   min-width: 90px;
