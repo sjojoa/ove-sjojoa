@@ -62,6 +62,21 @@ const patches = [
     to: "                    if (!updatedData.color) updatedData.color = getFeatureToColorMap()[updatedData.type];",
   },
   {
+    // The translation of a CDS feature stopped dead at the feature's own end.
+    // src/features/cdsReadThrough.js widens the range to the next in-frame stop
+    // codon (and leaves features that already end in one untouched).
+    name: "CDS translations read through to the next stop codon",
+    from: "    acc[cdsFeature.id] = translationsSelector_extends({}, cdsFeature, {\n      translationType: \"CDS Feature\"",
+    to: "    acc[cdsFeature.id] = translationsSelector_extends({}, cdsFeature, (window.oveCdsReadThrough ? window.oveCdsReadThrough(cdsFeature, sequence, isCircular) : null) || {}, {\n      translationType: \"CDS Feature\"",
+  },
+  {
+    // ...and the residues that came from the read-through are drawn in a muted
+    // colour, since they are inferred rather than annotated.
+    name: "read-through residues are visually muted",
+    from: "      } else {\n        color = aminoAcid.color;\n      }\n      return /*#__PURE__*/react_default.a.createElement(Translations_AASliver, {",
+    to: "      } else {\n        color = aminoAcid.color;\n      }\n      var oveRt = window.oveReadThroughColor && window.oveReadThroughColor(annotation, aminoAcidSliver.sequenceIndex);\n      if (oveRt) color = oveRt;\n      return /*#__PURE__*/react_default.a.createElement(Translations_AASliver, {",
+  },
+  {
     name: "alignment tool note reflects the built-in local aligner",
     from: "Note: This tool requires an alignment server to be hooked up for it to work properly. It will NOT work in the OVE demo page.",
     to: "Alignments run locally on this computer (no server needed). Tip: add .ab1 files, tick \\\"Align Sequencing Reads to Reference Sequence\\\" and optionally \\\"Auto-Trim\\\".",

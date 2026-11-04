@@ -304,6 +304,35 @@
     if (res && res.accepted) closeDoc(current.doc.id);
   }
 
+  // --------------------------------------------------- select all (Cmd+A)
+  // Routed here from the Edit menu. A focused text field gets its own text
+  // selected (what every other app does); otherwise the whole sequence of the
+  // active tab is selected, which is what the editor's own Select All does.
+  function selectAll() {
+    const el = document.activeElement;
+    // OVE keeps offscreen <input class="clipboard"> elements around for copy
+    // and paste, so a field only counts if it is one the user can actually see
+    // and type into.
+    const TEXTY = ["text", "search", "url", "tel", "email", "password", "number", ""];
+    const visible = el && el.offsetParent !== null;
+    const isField =
+      visible &&
+      !el.classList.contains("clipboard") &&
+      ((el.tagName === "INPUT" && TEXTY.includes((el.type || "").toLowerCase())) ||
+        el.tagName === "TEXTAREA" ||
+        el.isContentEditable);
+    if (isField) {
+      if (typeof el.select === "function") el.select();
+      else document.getSelection().selectAllChildren(el);
+      return;
+    }
+    const doc = getActive();
+    if (!doc || !doc.editor) return;
+    const state = doc.editor.getState();
+    const length = ((state.sequenceData || {}).sequence || "").length;
+    if (length) doc.editor.updateEditor({ selectionLayer: { start: 0, end: length - 1 } });
+  }
+
   // --------------------------------------------------------------- setup
   function init(first) {
     buildChrome();
@@ -316,6 +345,7 @@
       window.api.send("ove_focusThisWindow");
     });
     window.api.on("ove_closeTab", ({ docId }) => closeDoc(docId));
+    window.api.on("ove_selectAll", selectAll);
 
     addDoc(first);
     // tell the main process it is safe to push tabs to this window now
@@ -324,6 +354,7 @@
 
   window.oveTabs = {
     init,
+    selectAll,
     addDoc,
     closeDoc,
     renameDoc,

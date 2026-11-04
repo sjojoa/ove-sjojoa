@@ -105,6 +105,19 @@ module.exports = function createMenu({ createWindow, getSeqJsonFromPath, openPat
         { role: "cut" },
         { role: "copy" },
         { role: "paste" },
+        { type: "separator" },
+        {
+          // On macOS the standard editing shortcuts only reach a focused text
+          // field if a menu item claims the accelerator, so without this Cmd+A
+          // does nothing at all in the find box. We can't use { role: "selectAll" }
+          // because the sequence editor wants Cmd+A too; the renderer decides
+          // which of the two is meant, based on what currently has focus.
+          label: "Select All",
+          accelerator: "CmdOrCtrl+A",
+          click: (menuItem, win) => {
+            if (win && !win.isDestroyed()) win.webContents.send("ove_selectAll");
+          },
+        },
         // ...(isMac ? [
         //   { role: 'pasteAndMatchStyle' },
         //   { role: 'delete' },

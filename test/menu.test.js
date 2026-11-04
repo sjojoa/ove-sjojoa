@@ -21,6 +21,7 @@ const recentFiles = require("../src/main_utils/recentFiles");
 const createMenu = require("../src/main_utils/menu");
 
 const fileMenu = () => built.find((m) => m.label === "File");
+const editMenu = () => built.find((m) => m.label === "Edit");
 const openRecent = () => fileMenu().submenu.find((i) => i.label === "Open Recent");
 const makeFile = (name) => {
   const p = path.join(tmp, name);
@@ -89,5 +90,31 @@ describe("Open Recent", () => {
     openRecent().submenu.find((i) => i.label === "Clear Menu").click();
     assert.strictEqual(recentFiles.list().length, 0);
     assert.deepStrictEqual(openRecent().submenu, [{ label: "No Recent Files", enabled: false }]);
+  });
+});
+
+describe("Select All", () => {
+  const selectAllItem = () => {
+    createMenu({ createWindow() {}, getSeqJsonFromPath() {}, openPath() {} });
+    return editMenu().submenu.find((i) => i.label === "Select All");
+  };
+
+  it("claims Cmd+A, which macOS otherwise never delivers to a text field", () => {
+    assert.strictEqual(selectAllItem().accelerator, "CmdOrCtrl+A");
+  });
+
+  it("asks the renderer to decide between the text field and the sequence", () => {
+    const sent = [];
+    const win = { isDestroyed: () => false, webContents: { send: (...a) => sent.push(a) } };
+    selectAllItem().click(null, win);
+    assert.deepStrictEqual(sent, [["ove_selectAll"]]);
+  });
+
+  it("does nothing when the window is already gone", () => {
+    const sent = [];
+    const win = { isDestroyed: () => true, webContents: { send: (...a) => sent.push(a) } };
+    selectAllItem().click(null, win);
+    selectAllItem().click(null, undefined);
+    assert.deepStrictEqual(sent, []);
   });
 });
