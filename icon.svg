@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#E7EDF3"/>
+  </linearGradient></defs>
+  <rect width="1024" height="1024" rx="228" fill="url(#bg)"/>
+  <rect x="6" y="6" width="1012" height="1012" rx="224" fill="none" stroke="#C8D2DC" stroke-width="12"/>
+  <circle cx="512.0" cy="512.0" r="312.0" fill="none" stroke="#2F3640" stroke-width="24"/>
+  <path fill="#EF6500" d="M 595.5 177.2 A 345.0 345.0 0 0 1 834.1 635.6 L 857.2 644.5 L 757.9 704.1 L 749.4 603.1 L 772.5 612.0 A 279.0 279.0 0 0 0 579.5 241.3 Z"/>
+  <path fill="#31B440" d="M 724.4 783.9 A 345.0 345.0 0 0 1 530.1 856.5 L 531.4 881.2 L 436.5 814.7 L 525.3 765.9 L 526.6 790.6 A 279.0 279.0 0 0 0 683.8 731.9 Z"/>
+  <path fill="#006FEF" d="M 339.5 810.8 A 345.0 345.0 0 0 1 167.5 493.9 L 142.8 492.6 L 218.8 405.3 L 258.1 498.7 L 233.4 497.4 A 279.0 279.0 0 0 0 372.5 753.6 Z"/>
+  <path fill="#7B2CBF" d="M 226.0 319.1 A 345.0 345.0 0 0 1 366.2 199.3 L 355.7 176.9 L 468.6 203.0 L 404.5 281.6 L 394.1 259.1 A 279.0 279.0 0 0 0 280.7 356.0 Z"/>
+  <line x1="684.5" y1="684.5" x2="780.7" y2="780.7" stroke="#2F3640" stroke-width="14" stroke-linecap="round"/>
+  <line x1="296.6" y1="397.4" x2="176.5" y2="333.6" stroke="#2F3640" stroke-width="14" stroke-linecap="round"/>
+</svg>

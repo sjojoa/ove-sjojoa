@@ -318,6 +318,8 @@
     window.api.on("ove_closeTab", ({ docId }) => closeDoc(docId));
 
     addDoc(first);
+    // tell the main process it is safe to push tabs to this window now
+    window.api.send("ove_rendererReady");
   }
 
   window.oveTabs = {

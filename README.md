@@ -1,11 +1,13 @@
-# OVE-Rogala
+# ove-sjojoa
 
 A fork of [TeselaGen's Open Vector Editor desktop app](https://github.com/TeselaGen/ove-electron)
 (`ove-electron`) with the features our lab needed for routine cloning and Sanger
 verification. Everything runs locally — no server, no account, no internet.
 
-> Not affiliated with or endorsed by TeselaGen. "Open Vector Editor" is their project;
-> this fork is renamed to avoid confusion.
+> Not affiliated with or endorsed by TeselaGen. "Open Vector Editor" is their project.
+> This fork is renamed and uses its own icon (`icon.svg` / `icon.png`, drawn for this
+> project) rather than TeselaGen's, to avoid confusion and any trademark infringement.
+> The MIT licence covers copyright, not trademarks.
 
 ## What this fork adds
 

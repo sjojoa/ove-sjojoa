@@ -20,13 +20,23 @@ const rebuildMenu = () =>
 
 // Open a file by path: used by File > Open, File > Open Recent and the Dock's
 // recent documents. Records it in the recent list and refreshes the menu.
-async function openPath(filePath) {
+// Opens are queued: several files arriving at once (a multi-select in the Open
+// dialog, or dropping files on the Dock icon) used to race, each finding no
+// window yet and creating its own. Queuing means the first makes the window and
+// the rest become tabs in it.
+let openQueue = Promise.resolve();
+function openPath(filePath) {
+  openQueue = openQueue.then(() => openPathNow(filePath)).catch((e) => console.error(e));
+  return openQueue;
+}
+
+async function openPathNow(filePath) {
   try {
     const initialSeqJson = await getSeqJsonFromPath(filePath);
     if (!initialSeqJson || !initialSeqJson.sequence) {
       throw new Error("no sequence could be read from this file");
     }
-    openInTabOrWindow({ seqJson: initialSeqJson, filePath });
+    await openInTabOrWindow({ seqJson: initialSeqJson, filePath });
     noteRecentFile(filePath);
   } catch (error) {
     console.error(`could not open ${filePath}:`, error);
@@ -46,19 +56,36 @@ function noteRecentFile(filePath) {
 }
 
 // Prefer adding a tab to the window the user is in; fall back to a new window.
-function openInTabOrWindow({ seqJson, filePath, preferWindow }) {
+async function openInTabOrWindow({ seqJson, filePath, preferWindow }) {
   const target =
     preferWindow ||
     BrowserWindow.getFocusedWindow() ||
     BrowserWindow.getAllWindows().find((w) => !w.isDestroyed() && !w.isMinimized());
   if (target) {
-    target.webContents.send("ove_addTab", { seqJson, filePath });
+    sendTab(target, { seqJson, filePath });
     target.show();
     return target;
   }
-  createWindow({ initialSeqJson: seqJson, filePath });
+  await createWindow({ initialSeqJson: seqJson, filePath });
   return null;
 }
+
+// A freshly created window cannot receive "add tab" until its page has loaded
+// and registered the listener, so hold messages until it says it is ready.
+function sendTab(win, payload) {
+  if (!win || win.isDestroyed()) return;
+  if (win.__oveReady) win.webContents.send("ove_addTab", payload);
+  else (win.__ovePendingTabs = win.__ovePendingTabs || []).push(payload);
+}
+
+ipcMain.handle("ove_rendererReady", (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win) return;
+  win.__oveReady = true;
+  const queued = win.__ovePendingTabs || [];
+  win.__ovePendingTabs = [];
+  queued.forEach((payload) => win.webContents.send("ove_addTab", payload));
+});
 
 const pointInBounds = (b, x, y) =>
   x >= b.x && x <= b.x + b.width && y >= b.y && y <= b.y + b.height;
@@ -181,9 +208,7 @@ app.on("open-file", async (event, path) => {
   console.log(`open-file`)
   try {
     console.log("trying to open gb file");
-    const initialSeqJson = await getSeqJsonFromPath(path);
-    openInTabOrWindow({ seqJson: initialSeqJson, filePath: path });
-    noteRecentFile(path);
+    openPath(path); // queued, so several files at once land as tabs
   } catch (e) {
     console.error(`e73562891230:`, e);
   }
@@ -197,19 +222,16 @@ app.on("ready", async () => {
   autoUpdater.checkForUpdatesAndNotify();
   isAppReady = true;
   if (!windows.length && !isMacOpenTriggered) {
-    let initialSeqJson;
-    // The file to open is argv[1] in a packaged app but argv[2] under
-    // `electron .`, so take the first argument that is an actual file.
-    const startupPath = process.argv
+    // Files to open are argv[1..] in a packaged app but argv[2..] under
+    // `electron .`, so take every argument that is an actual file. They go
+    // through the same queue as any other open, so they become tabs in one
+    // window rather than a window each. (This was `filePath: path` -- the node
+    // path module, not a file path.)
+    const startupPaths = process.argv
       .slice(1)
-      .find((a) => a && a !== "." && !a.startsWith("-") && fs.existsSync(a) && fs.statSync(a).isFile());
-    if (startupPath) {
-      initialSeqJson = await getSeqJsonFromPath(startupPath);
-      if (initialSeqJson && initialSeqJson.sequence) noteRecentFile(startupPath);
-      else initialSeqJson = undefined;
-    }
-    // was `filePath: path` -- the node path module, not a file path
-    createWindow({ filePath: initialSeqJson ? startupPath : undefined, initialSeqJson });
+      .filter((a) => a && a !== "." && !a.startsWith("-") && fs.existsSync(a) && fs.statSync(a).isFile());
+    if (startupPaths.length) startupPaths.forEach((p) => openPath(p));
+    else createWindow({});
   }
 });
 
@@ -287,7 +309,7 @@ ipcMain.handle("ove_tabDropped", (event, { screenX, screenY, payload, isOnlyTab 
       pointInBounds(w.getBounds(), screenX, screenY)
   );
   if (target) {
-    target.webContents.send("ove_addTab", payload);
+    sendTab(target, payload);
     target.focus();
     return { accepted: true, movedTo: "window" };
   }
@@ -333,7 +355,7 @@ ipcMain.handle("ove_tabContextMenu", (event, { docId, payload }) => {
       template.push({
         label: `Move to ${w.getTitle() || `Window ${i + 1}`}`,
         click: () => {
-          w.webContents.send("ove_addTab", payload);
+          sendTab(w, payload);
           w.focus();
           source.webContents.send("ove_closeTab", { docId });
         },

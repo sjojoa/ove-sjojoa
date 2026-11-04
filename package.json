@@ -1,5 +1,5 @@
 {
-  "name": "ove-rogala",
+  "name": "ove-sjojoa",
   "version": "1.6.0",
   "description": "A fork of TeselaGen's Open Vector Editor desktop app, with offline Sanger-read alignment, cloning tools, document tabs and per-feature colours",
   "main": "main.js",
@@ -15,25 +15,74 @@
     "build-local-mac": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dir --arm64 --publish never -c.mac.identity=null"
   },
   "build": {
-    "appId": "com.rogalalab.oveRogala",
-    "productName": "OVE-Rogala",
+    "appId": "io.github.sjojoa.ove",
+    "productName": "OVE-sjojoa",
     "afterSign": "src/misc/notarize.js",
     "mac": {
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
-      "target": { "target": "dmg", "arch": ["x64", "arm64"] },
+      "target": {
+        "target": "dmg",
+        "arch": [
+          "x64",
+          "arm64"
+        ]
+      },
       "entitlements": "src/misc/entitlements.mac.plist",
-      "entitlementsInherit": "src/misc/entitlements.mac.plist"
+      "entitlementsInherit": "src/misc/entitlements.mac.plist",
+      "icon": "build/icon.icns"
     },
-    "win": { "target": "nsis" },
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.icns"
+    },
     "linux": {
-      "target": { "target": "deb", "arch": ["x64", "arm64"] },
+      "target": {
+        "target": "deb",
+        "arch": [
+          "x64",
+          "arm64"
+        ]
+      },
       "icon": "build/icon.icns"
     },
     "fileAssociations": [
-      { "ext": "gb" }, { "ext": "gbk" }, { "ext": "gp" }, { "ext": "dna" },
-      { "ext": "json" }, { "ext": "fasta" }, { "ext": "fa" }, { "ext": "fas" },
-      { "ext": "fna" }, { "ext": "ffn" }, { "ext": "gff" }, { "ext": "gff3" }
+      {
+        "ext": "gb"
+      },
+      {
+        "ext": "gbk"
+      },
+      {
+        "ext": "gp"
+      },
+      {
+        "ext": "dna"
+      },
+      {
+        "ext": "json"
+      },
+      {
+        "ext": "fasta"
+      },
+      {
+        "ext": "fa"
+      },
+      {
+        "ext": "fas"
+      },
+      {
+        "ext": "fna"
+      },
+      {
+        "ext": "ffn"
+      },
+      {
+        "ext": "gff"
+      },
+      {
+        "ext": "gff3"
+      }
     ]
   },
   "dependencies": {
