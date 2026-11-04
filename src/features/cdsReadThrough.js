@@ -129,16 +129,139 @@
   }
 
   // Asked once per rendered amino acid by the patched Translation renderer.
+  // `oveReadThrough` is a list of ranges, since a merged translation can have
+  // inferred stretches between the features it spans.
   function isReadThroughBase(annotation, sequenceIndex, sequenceLength) {
     if (!annotation || !annotation.oveReadThrough) return false;
-    return inRange(sequenceIndex, annotation.oveReadThrough, sequenceLength);
+    const ranges = [].concat(annotation.oveReadThrough);
+    for (const range of ranges) {
+      if (inRange(sequenceIndex, range, sequenceLength)) return true;
+    }
+    return false;
   }
 
-  const api = { extendCds, isReadThroughBase, readThroughColor, codonAt, isStop, STOP_CODONS };
+  // ------------------------------------------------------- merging one ORF
+  // Several CDS features can sit in a single open reading frame — a tag, a
+  // linker and the gene itself, say. Translating each one separately stacks a
+  // near-identical row of amino acids per feature, each reading through to the
+  // same stop codon. They are one protein, so they get one translation: it
+  // starts at the 5'-most feature of the frame and ends at their shared stop.
+  //
+  // Two features belong to the same reading frame exactly when, after reading
+  // through, they terminate on the same base — getting there in steps of three
+  // means their start codons are in the same frame.
+
+  const mod = (i, len) => ((i % len) + len) % len;
+
+  function distanceToTerminus(entry, len, isCircular) {
+    return entry.forward
+      ? (isCircular ? mod(entry.terminus - entry.feature.start, len) : entry.terminus - entry.feature.start)
+      : (isCircular ? mod(entry.feature.end - entry.terminus, len) : entry.feature.end - entry.terminus);
+  }
+
+  // The parts of `span` not covered by any of `covered`, as absolute ranges.
+  function uncovered(span, covered, len, isCircular) {
+    const offsetOf = (i) => (isCircular ? mod(i - span.start, len) : i - span.start);
+    const spanLen = offsetOf(span.end) + 1;
+    const blocks = covered
+      .map((r) => {
+        const from = offsetOf(r.start);
+        const length = (isCircular ? mod(r.end - r.start, len) : r.end - r.start) + 1;
+        return [from, from + length - 1];
+      })
+      .filter(([, to]) => to >= 0)
+      .map(([from, to]) => [Math.max(0, from), Math.min(spanLen - 1, to)])
+      .filter(([from, to]) => from <= to)
+      .sort((a, b) => a[0] - b[0]);
+
+    const gaps = [];
+    let cursor = 0;
+    for (const [from, to] of blocks) {
+      if (from > cursor) gaps.push([cursor, from - 1]);
+      cursor = Math.max(cursor, to + 1);
+    }
+    if (cursor <= spanLen - 1) gaps.push([cursor, spanLen - 1]);
+    const norm = (i) => (isCircular ? mod(span.start + i, len) : span.start + i);
+    return gaps.map(([from, to]) => ({ start: norm(from), end: norm(to) }));
+  }
+
+  // The whole set of CDS translations for a sequence: one per reading frame,
+  // not one per feature. Returns a map keyed by feature id, as the editor wants.
+  function cdsTranslations(cdsFeatures, sequence, isCircular) {
+    const out = {};
+    const features = cdsFeatures ? [].concat(cdsFeatures) : [];
+    const len = (sequence || "").length;
+    if (!features.length || !len) return out;
+
+    const entries = features.map((feature) => {
+      const extended = extendCds(feature, sequence, isCircular);
+      const forward =
+        feature.forward !== undefined ? !!feature.forward : feature.strand !== -1;
+      const start = extended ? extended.start : feature.start;
+      const end = extended ? extended.end : feature.end;
+      return { feature, forward, start, end, terminus: forward ? end : start };
+    });
+
+    // group by strand and shared stop codon
+    const groups = new Map();
+    for (const entry of entries) {
+      const key = (entry.forward ? "+" : "-") + entry.terminus;
+      const inFrame = distanceToTerminus(entry, len, isCircular) % 3 === 2;
+      // anything whose frame doesn't line up stays on its own, so a joined or
+      // malformed feature can never be folded into someone else's protein
+      const groupKey = inFrame ? key : "solo:" + entry.feature.id;
+      if (!groups.has(groupKey)) groups.set(groupKey, []);
+      groups.get(groupKey).push(entry);
+    }
+
+    for (const group of groups.values()) {
+      // reading order: the member that starts furthest upstream comes first
+      group.sort(
+        (a, b) =>
+          distanceToTerminus(b, len, isCircular) - distanceToTerminus(a, len, isCircular)
+      );
+      const head = group[0];
+      const span = head.forward
+        ? { start: head.feature.start, end: head.terminus }
+        : { start: head.terminus, end: head.feature.end };
+
+      const annotation = Object.assign({}, head.feature, {
+        start: span.start,
+        end: span.end,
+        forward: head.forward,
+        translationType: "CDS Feature",
+      });
+      if (group.length > 1) {
+        annotation.name = group
+          .map((e) => e.feature.name)
+          .filter(Boolean)
+          .join(" \u2192 ");
+      }
+      const inferred = uncovered(
+        span,
+        group.map((e) => ({ start: e.feature.start, end: e.feature.end })),
+        len,
+        isCircular
+      );
+      if (inferred.length) annotation.oveReadThrough = inferred;
+      out[head.feature.id] = annotation;
+    }
+    return out;
+  }
+
+  const api = {
+    extendCds,
+    cdsTranslations,
+    isReadThroughBase,
+    readThroughColor,
+    codonAt,
+    isStop,
+    STOP_CODONS,
+  };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   if (typeof root !== "undefined" && root.document) {
-    root.oveCdsReadThrough = (feature, sequence, isCircular) =>
-      extendCds(feature, sequence, isCircular);
+    root.oveCdsTranslations = (cdsFeatures, sequence, isCircular) =>
+      cdsTranslations(cdsFeatures, sequence, isCircular);
     root.oveReadThroughColor = (annotation, sequenceIndex, sequenceLength) =>
       isReadThroughBase(annotation, sequenceIndex, sequenceLength) ? readThroughColor : null;
   }

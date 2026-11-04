@@ -52,10 +52,14 @@ Owczarzy (2008) salt correction, and match Biopython's `Tm_NN` to within 0.001 �
 - **Per-feature colours** — a colour row in the Add/Edit Feature dialog, saved as a
   `/color=` qualifier so it survives a round trip through `.gb` and opens correctly elsewhere
 - **File → Open Recent** — last 10 files, ⌘1–⌘9, auto-pruned
-- **CDS read-through translation** — when a CDS feature does not end in a stop codon, its
-  translation keeps going in frame to the first stop codon (wrapping the origin on circular
-  sequences). The inferred residues are drawn in grey, so they are never mistaken for
-  annotated coding sequence. ([`src/features/cdsReadThrough.js`](src/features/cdsReadThrough.js))
+- **One CDS translation per reading frame, read through to the stop codon**
+  ([`src/features/cdsReadThrough.js`](src/features/cdsReadThrough.js)). Upstream gives every
+  CDS feature its own row of amino acids, so a tag + linker + gene construct stacks three
+  near-identical rows. Here they are recognised as one protein and share a single row, which
+  continues in frame past the last annotation to the first stop codon (wrapping the origin on
+  circular sequences). Residues no feature annotates are drawn in grey, so inferred sequence is
+  never mistaken for annotated coding sequence. Features that already end in a stop codon are
+  not extended, and separate frames or strands stay on separate rows.
 - **⌘A behaves like ⌘A** — selects the text in the find box when a field has focus, and the
   whole sequence otherwise
 
@@ -70,6 +74,7 @@ These are patched at install time by [`scripts/patch-ove.js`](scripts/patch-ove.
 | `handleAlignment` result not awaited | a local aligner had to return synchronously |
 | `filePath: path` in `main.js` | passed Node's `path` module instead of the file path |
 | `JSON.parse` of a plain string in `preload.js` | `window.filePath` was never set, so Save never pre-filled a path |
+| one translation row per CDS feature | a tag + linker + gene in one frame stacked three rows of the same protein |
 | CDS translations truncated at the feature boundary | a mis-annotated CDS hid the real reading frame; now it reads through to the stop codon |
 | no `selectAll` role in the Edit menu | macOS never delivered ⌘A to any text field, so the find box could not be cleared |
 

@@ -1,5 +1,5 @@
 const assert = require("assert");
-const { extendCds, isReadThroughBase } = require("../src/features/cdsReadThrough");
+const { extendCds, cdsTranslations, isReadThroughBase } = require("../src/features/cdsReadThrough");
 
 const revcomp = (s) =>
   s.split("").reverse().map((c) => ({ A: "T", T: "A", G: "C", C: "G" }[c] || c)).join("");
@@ -84,5 +84,82 @@ describe("CDS read-through translation", () => {
     assert.strictEqual(isReadThroughBase(ann, 23, 24), true);
     assert.strictEqual(isReadThroughBase(ann, 0, 24), true);
     assert.strictEqual(isReadThroughBase(ann, 3, 24), false);
+  });
+});
+
+describe("one translation per reading frame", () => {
+  // tag + linker + gene, all in frame, gene not terminated by its own annotation
+  const TAG = { id: "tag", name: "AviTag", start: 0, end: 2, forward: true };
+  const LINKER = { id: "linker", name: "GS_linker", start: 3, end: 8, forward: true };
+  const GENE = { id: "gene", name: "SLC38A7", start: 9, end: 11, forward: true };
+
+  it("merges features that share a reading frame into a single translation", () => {
+    const out = cdsTranslations([GENE, TAG, LINKER], SEQ, false);
+    const rows = Object.values(out);
+    assert.strictEqual(rows.length, 1, "one protein, one row");
+    assert.strictEqual(rows[0].start, 0, "starts at the 5'-most feature");
+    assert.strictEqual(rows[0].end, 17, "ends on the shared stop codon");
+  });
+
+  it("names the merged row in reading order", () => {
+    const out = cdsTranslations([GENE, TAG, LINKER], SEQ, false);
+    assert.strictEqual(Object.values(out)[0].name, "AviTag \u2192 GS_linker \u2192 SLC38A7");
+  });
+
+  it("marks as read-through only what no feature annotates", () => {
+    const out = cdsTranslations([TAG, LINKER, GENE], SEQ, false);
+    const row = Object.values(out)[0];
+    assert.deepStrictEqual(row.oveReadThrough, [{ start: 12, end: 17 }]);
+    for (const i of [0, 5, 11]) assert.strictEqual(isReadThroughBase(row, i), false);
+    for (const i of [12, 17]) assert.strictEqual(isReadThroughBase(row, i), true);
+  });
+
+  it("treats a gap between two features in the frame as read-through", () => {
+    const out = cdsTranslations([TAG, GENE], SEQ, false); // nothing annotates 3..8
+    const row = Object.values(out)[0];
+    assert.deepStrictEqual(row.oveReadThrough, [
+      { start: 3, end: 8 },
+      { start: 12, end: 17 },
+    ]);
+  });
+
+  it("keeps separate reading frames on separate rows", () => {
+    // offset by one base, so this one cannot share a stop codon with the others
+    const otherFrame = { id: "other", name: "shifted", start: 1, end: 6, forward: true };
+    const out = cdsTranslations([TAG, otherFrame], SEQ, false);
+    assert.strictEqual(Object.keys(out).length, 2);
+  });
+
+  it("keeps the two strands apart", () => {
+    const out = cdsTranslations(
+      [TAG, { id: "rev", name: "reverse", start: 0, end: 5, forward: false }],
+      SEQ,
+      false
+    );
+    assert.strictEqual(Object.keys(out).length, 2);
+  });
+
+  it("merges on the reverse strand too, extending downwards", () => {
+    const rc = revcomp(SEQ);
+    const downstream = { id: "d", name: "gene", start: 12, end: 17, forward: false };
+    const upstream = { id: "u", name: "tag", start: 18, end: 23, forward: false };
+    const rows = Object.values(cdsTranslations([downstream, upstream], rc, false));
+    assert.strictEqual(rows.length, 1);
+    assert.strictEqual(rows[0].end, 23, "still begins at the start codon");
+    assert.strictEqual(rows[0].start, 6, "reaches the stop codon at 6..8");
+    assert.strictEqual(rows[0].name, "tag \u2192 gene");
+  });
+
+  it("leaves a lone feature that needs no extension exactly as it was", () => {
+    const complete = { id: "c", name: "cds", start: 0, end: 17, forward: true };
+    const row = Object.values(cdsTranslations([complete], SEQ, false))[0];
+    assert.strictEqual(row.start, 0);
+    assert.strictEqual(row.end, 17);
+    assert.strictEqual(row.oveReadThrough, undefined);
+    assert.strictEqual(row.name, "cds", "a single feature keeps its own name");
+  });
+
+  it("returns nothing when there are no CDS features", () => {
+    assert.deepStrictEqual(cdsTranslations([], SEQ, false), {});
   });
 });

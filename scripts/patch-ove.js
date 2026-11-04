@@ -62,12 +62,13 @@ const patches = [
     to: "                    if (!updatedData.color) updatedData.color = getFeatureToColorMap()[updatedData.type];",
   },
   {
-    // The translation of a CDS feature stopped dead at the feature's own end.
-    // src/features/cdsReadThrough.js widens the range to the next in-frame stop
-    // codon (and leaves features that already end in one untouched).
-    name: "CDS translations read through to the next stop codon",
-    from: "    acc[cdsFeature.id] = translationsSelector_extends({}, cdsFeature, {\n      translationType: \"CDS Feature\"",
-    to: "    acc[cdsFeature.id] = translationsSelector_extends({}, cdsFeature, (window.oveCdsReadThrough ? window.oveCdsReadThrough(cdsFeature, sequence, isCircular) : null) || {}, {\n      translationType: \"CDS Feature\"",
+    // Upstream gave every CDS feature its own translation, stopping dead at
+    // that feature's end. src/features/cdsReadThrough.js instead returns one
+    // translation per reading frame — tag, linker and gene share a row — and
+    // carries it through to the next in-frame stop codon.
+    name: "one CDS translation per reading frame, read through to the stop codon",
+    from: "Object(lodash[\"reduce\"])(cdsFeatures, function (acc, cdsFeature) {\n    acc[cdsFeature.id] = translationsSelector_extends({}, cdsFeature, {\n      translationType: \"CDS Feature\"\n    });\n    return acc;\n  }, {})",
+    to: "(window.oveCdsTranslations ? window.oveCdsTranslations(cdsFeatures, sequence, isCircular) : Object(lodash[\"reduce\"])(cdsFeatures, function (acc, cdsFeature) {\n    acc[cdsFeature.id] = translationsSelector_extends({}, cdsFeature, {\n      translationType: \"CDS Feature\"\n    });\n    return acc;\n  }, {}))",
   },
   {
     // ...and the residues that came from the read-through are drawn in a muted
