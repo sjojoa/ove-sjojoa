@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Open Vector Editor</title>
+  </head>
+  <body>
+    <!-- You can also require other files to run in this process -->
+    <link
+      rel="stylesheet"
+      type="text/css"
+      href="node_modules/open-vector-editor/umd/main.css"
+    />
+    <link rel="stylesheet" type="text/css" href="src/style.css" />
+    <link rel="stylesheet" type="text/css" href="src/cloning/cloning.css" />
+    <link rel="stylesheet" type="text/css" href="src/features/featureColor.css" />
+    <link rel="stylesheet" type="text/css" href="src/tabs/tabs.css" />
+
+    <div id="notification" class="hidden">
+      <p id="message"></p>
+      <button id="close-button" onClick="closeNotification()">
+        Close
+      </button>
+      <button id="restart-button" onClick="restartApp()" class="hidden">
+        Restart
+      </button>
+    </div>
+
+    <a
+      class="bp3-button bp3-minimal darkModeBtn"
+      title="Dark Mode"
+      onclick="toggleDarkMode(); return false"
+      ><span class="bp3-icon-standard bp3-icon-moon"></span
+    ></a>
+    <script src="./src/alignment/alignmentSettings.js"></script>
+    <script
+      type="text/javascript"
+      src="node_modules/open-vector-editor/umd/open-vector-editor.js"
+    ></script>
+    <script
+      type="text/javascript"
+      src="node_modules/ove-auto-annotate/umd/ove-auto-annotate.js"
+    ></script>
+    <script src="./src/alignment/localAligner.js"></script>
+    <script src="./src/alignment/mismatchNavigator.js"></script>
+    <script src="./src/features/featureColor.js"></script>
+    <script src="node_modules/@teselagen/sequence-utils/index.umd.js"></script>
+    <script src="./src/cloning/dnaTools.js"></script>
+    <script src="./src/cloning/cloningUI.js"></script>
+    <script src="./src/cloning/cloningTools.js"></script>
+    <script src="./src/tabs/tabs.js"></script>
+    <script src="./src/renderer.js"></script>
+    <!-- <script src="./src/renderer_utils/autoUpdate.js"></script> -->
+    <script src="./src/renderer_utils/darkMode.js"></script>
+  </body>
+</html>

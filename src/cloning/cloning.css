@@ -1,0 +1,175 @@
+/* Cloning menu dialogs */
+.ove-cl-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20000;
+  background: rgba(16, 22, 26, 0.55);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 40px;
+  overflow: auto;
+}
+.ove-cl-dialog {
+  max-width: calc(100vw - 40px);
+  max-height: calc(100vh - 80px);
+  display: flex;
+  flex-direction: column;
+  padding: 0 !important;
+}
+.ove-cl-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(16, 22, 26, 0.15);
+}
+.ove-cl-header h4 {
+  margin: 0;
+}
+.ove-cl-body {
+  padding: 12px 14px;
+  overflow: auto;
+}
+.ove-cl-footer {
+  padding: 10px 14px;
+  border-top: 1px solid rgba(16, 22, 26, 0.15);
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+.ove-cl-section {
+  margin-bottom: 12px;
+}
+.ove-cl-section h5 {
+  margin: 4px 0 8px;
+}
+.ove-cl-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: flex-end;
+  margin-bottom: 8px;
+}
+.ove-cl-field {
+  display: inline-flex !important;
+  flex-direction: column;
+  margin: 0 !important;
+  font-size: 12px;
+}
+.ove-cl-field-label {
+  margin-bottom: 3px;
+  opacity: 0.8;
+}
+.ove-cl-hint {
+  font-size: 11px;
+  opacity: 0.65;
+  margin-top: 2px;
+}
+.ove-cl-mono {
+  font-family: "Ubuntu Mono", Menlo, monospace !important;
+  letter-spacing: 0.02em;
+}
+.ove-cl-tail {
+  color: #a66321;
+}
+.bp3-dark .ove-cl-tail {
+  color: #ffb366;
+}
+.ove-cl-table-wrap {
+  max-height: 280px;
+  overflow: auto;
+  border: 1px solid rgba(16, 22, 26, 0.15);
+  border-radius: 3px;
+}
+.ove-cl-table {
+  width: 100%;
+  font-size: 12px;
+}
+.ove-cl-table td {
+  vertical-align: middle !important;
+  white-space: nowrap;
+}
+.ove-cl-table tr.ove-cl-selected td {
+  background: rgba(19, 124, 189, 0.25) !important;
+}
+.ove-cl-warn {
+  color: #d9822b;
+  cursor: help;
+  font-weight: 600;
+}
+.ove-cl-ok {
+  color: #0f9960;
+}
+.ove-cl-callout {
+  margin: 6px 0 10px;
+  font-size: 12px;
+}
+.ove-cl-kv {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 2px 12px;
+  font-size: 12px;
+}
+.ove-cl-kv dt {
+  opacity: 0.7;
+}
+.ove-cl-kv dd {
+  margin: 0;
+}
+.ove-cl-gel {
+  background: #111;
+  border-radius: 4px;
+}
+.ove-cl-lane-row td {
+  white-space: normal !important;
+}
+details.ove-cl-details summary {
+  cursor: pointer;
+  font-size: 12px;
+  margin-bottom: 6px;
+  opacity: 0.8;
+}
+
+/* alignment navigation bar (mismatch arrows + position slider) */
+.ove-align-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 10px;
+  white-space: nowrap;
+}
+.ove-align-nav input[type="range"] {
+  width: 130px;
+}
+/* let the alignment top bar wrap so OVE's zoom slider and visibility menu stay reachable */
+.ve-alignment-top-bar {
+  flex-wrap: wrap !important;
+  row-gap: 4px;
+  height: auto !important;
+}
+.ove-align-nav {
+  flex-wrap: wrap;
+}
+.ove-mismatch-info {
+  flex-basis: 100%;
+  font-size: 12px;
+  padding: 2px 4px 0;
+  white-space: normal;
+  color: #106ba3;
+}
+.bp3-dark .ove-mismatch-info {
+  color: #48aff0;
+}
+.ove-align-nav .ove-align-pos {
+  font-size: 11px;
+  min-width: 90px;
+  opacity: 0.8;
+}
+/* per-track zoom sliders zoom one track independently of the others,
+   which breaks an alignment, so hide them inside alignment views */
+.alignmentHolder .tg-zoom-bar,
+.alignmentView-top-container .tg-zoom-bar {
+  display: none !important;
+}

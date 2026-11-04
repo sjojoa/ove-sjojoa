@@ -1,0 +1,58 @@
+{
+  "name": "ove-rogala",
+  "version": "1.6.0",
+  "description": "A fork of TeselaGen's Open Vector Editor desktop app, with offline Sanger-read alignment, cloning tools, document tabs and per-feature colours",
+  "main": "main.js",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron . ./pA11990.gb",
+    "postinstall": "node scripts/patch-ove.js",
+    "test": "mocha test/*.test.js",
+    "lint": "eslint main.js src scripts test",
+    "build-mac": "env-cmd electron-builder --mac --publish never",
+    "build-win": "env-cmd electron-builder --win --publish never",
+    "build-linux": "env-cmd electron-builder --linux --publish never",
+    "build-local-mac": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dir --arm64 --publish never -c.mac.identity=null"
+  },
+  "build": {
+    "appId": "com.rogalalab.oveRogala",
+    "productName": "OVE-Rogala",
+    "afterSign": "src/misc/notarize.js",
+    "mac": {
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "target": { "target": "dmg", "arch": ["x64", "arm64"] },
+      "entitlements": "src/misc/entitlements.mac.plist",
+      "entitlementsInherit": "src/misc/entitlements.mac.plist"
+    },
+    "win": { "target": "nsis" },
+    "linux": {
+      "target": { "target": "deb", "arch": ["x64", "arm64"] },
+      "icon": "build/icon.icns"
+    },
+    "fileAssociations": [
+      { "ext": "gb" }, { "ext": "gbk" }, { "ext": "gp" }, { "ext": "dna" },
+      { "ext": "json" }, { "ext": "fasta" }, { "ext": "fa" }, { "ext": "fas" },
+      { "ext": "fna" }, { "ext": "ffn" }, { "ext": "gff" }, { "ext": "gff3" }
+    ]
+  },
+  "dependencies": {
+    "@teselagen/sequence-utils": "0.1.24",
+    "bio-parsers": "^9.0.1",
+    "electron-updater": "^5.3.0",
+    "electron-window-state": "^5.0.3",
+    "open-vector-editor": "18.3.6",
+    "ove-auto-annotate": "^0.0.5",
+    "querystring": "^0.2.1",
+    "ve-range-utils": "^2.6.6",
+    "ve-sequence-utils": "^5.2.8"
+  },
+  "devDependencies": {
+    "electron": "22.0.0",
+    "electron-builder": "^23.6.0",
+    "electron-notarize": "^1.2.1",
+    "env-cmd": "^10.1.0",
+    "eslint": "^8.28.0",
+    "mocha": "^10.1.0"
+  }
+}

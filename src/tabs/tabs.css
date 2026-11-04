@@ -1,0 +1,130 @@
+/* Document tabs */
+body.ove-has-tabs {
+  margin: 0;
+  overflow: hidden;
+}
+#ove-tabstrip {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 32px;
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  padding: 3px 6px 0;
+  box-sizing: border-box;
+  background: #e8edf2;
+  border-bottom: 1px solid rgba(16, 22, 26, 0.18);
+  z-index: 6000;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-app-region: drag; /* empty strip space still drags the window */
+}
+.bp3-dark #ove-tabstrip {
+  background: #262c33;
+  border-bottom-color: rgba(255, 255, 255, 0.15);
+}
+.ove-tab {
+  -webkit-app-region: no-drag;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+  min-width: 90px;
+  padding: 0 6px 0 10px;
+  border: 1px solid rgba(16, 22, 26, 0.18);
+  border-bottom: none;
+  border-radius: 5px 5px 0 0;
+  background: #d7dee6;
+  font-size: 12px;
+  cursor: default;
+  user-select: none;
+  white-space: nowrap;
+}
+.bp3-dark .ove-tab {
+  background: #333a42;
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #e1e8ed;
+}
+.ove-tab-active {
+  background: #fff;
+  font-weight: 600;
+}
+.bp3-dark .ove-tab-active {
+  background: #30404d;
+}
+.ove-tab-dragging {
+  opacity: 0.6;
+}
+.ove-tab-name {
+  flex: 1 1 auto; /* keeps the close button pinned to the tab's right edge */
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ove-tab-close {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 0 3px;
+  border-radius: 3px;
+  opacity: 0.55;
+  color: inherit;
+}
+.ove-tab-close:hover {
+  opacity: 1;
+  background: rgba(16, 22, 26, 0.12);
+}
+#ove-docs {
+  position: fixed;
+  top: 32px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+.ove-doc {
+  position: absolute;
+  inset: 0;
+  display: none;
+}
+.ove-doc.ove-doc-active {
+  display: block;
+}
+/* OVE's fullscreen editor pins itself to the viewport, which would sit under
+   the tab strip. Constrain it to its own tab instead. */
+.ove-doc .veEditor,
+.ove-doc .previewModeFullscreen,
+.ove-doc .tgSimpleViewFullscreen {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+.darkModeBtn.ove-in-strip {
+  -webkit-app-region: no-drag;
+  position: static !important;
+  margin-left: auto;
+  align-self: center;
+}
+#ove-drag-hint {
+  position: fixed;
+  left: 50%;
+  top: 44px;
+  transform: translateX(-50%);
+  background: rgba(16, 22, 26, 0.85);
+  color: #fff;
+  font-size: 12px;
+  padding: 5px 12px;
+  border-radius: 4px;
+  z-index: 7000;
+  pointer-events: none;
+  display: none;
+}
+#ove-drag-hint.ove-visible {
+  display: block;
+}
