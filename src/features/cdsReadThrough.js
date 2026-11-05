@@ -52,7 +52,7 @@
     return codon !== null && STOP_CODONS.indexOf(codon) !== -1;
   }
 
-  function inRange(i, range, len) {
+  function inRange(i, range) {
     if (!range) return false;
     if (range.start <= range.end) return i >= range.start && i <= range.end;
     // origin-spanning
@@ -131,11 +131,11 @@
   // Asked once per rendered amino acid by the patched Translation renderer.
   // `oveReadThrough` is a list of ranges, since a merged translation can have
   // inferred stretches between the features it spans.
-  function isReadThroughBase(annotation, sequenceIndex, sequenceLength) {
+  function isReadThroughBase(annotation, sequenceIndex) {
     if (!annotation || !annotation.oveReadThrough) return false;
     const ranges = [].concat(annotation.oveReadThrough);
     for (const range of ranges) {
-      if (inRange(sequenceIndex, range, sequenceLength)) return true;
+      if (inRange(sequenceIndex, range)) return true;
     }
     return false;
   }

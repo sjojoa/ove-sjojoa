@@ -103,8 +103,10 @@ window.oveMakeEditor = function oveMakeEditor(container, doc, restoring) {
   //   editor.close() //this calls reactDom.unmountComponent at the node you passed as the first arg
   // },
   onRename: (newName) => {
-    setNewTitle(newName);
-  }, //this option should be shown by default
+    // upstream called a setNewTitle() that does not exist in this app, so
+    // renaming a sequence threw; the tab strip owns the title here
+    window.oveTabs.renameDoc(doc.id, newName);
+  },
   // onNew: () => {}, //unless this callback is defined, don't show the option to create a new seq
   // onDuplicate: () => {}, //unless this callback is defined, don't show the option to create a new seq
   onSaveAs: handleSave(true),

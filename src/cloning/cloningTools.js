@@ -885,7 +885,7 @@
 
   // ---------------------------------------------------------------- gel
   function openGelSimulator() {
-    const { seqData, name } = current();
+    const { seqData } = current();
     const agarose = U.select(Object.keys(D.AGAROSE_RANGES).map((k) => ({ value: k, label: `${k}% agarose` })), "1", { width: 140 });
     const ladder = U.select(Object.keys(D.LADDERS), "GeneRuler 1 kb Plus", { width: 200 });
     const singles = D.COMMON_ENZYMES.filter((e) => {

@@ -74,6 +74,7 @@ These are patched at install time by [`scripts/patch-ove.js`](scripts/patch-ove.
 | `handleAlignment` result not awaited | a local aligner had to return synchronously |
 | `filePath: path` in `main.js` | passed Node's `path` module instead of the file path |
 | `JSON.parse` of a plain string in `preload.js` | `window.filePath` was never set, so Save never pre-filled a path |
+| `onRename` called an undefined `setNewTitle` | File → Rename Sequence threw, so sequences could not be renamed |
 | one translation row per CDS feature | a tag + linker + gene in one frame stacked three rows of the same protein |
 | CDS translations truncated at the feature boundary | a mis-annotated CDS hid the real reading frame; now it reads through to the stop codon |
 | no `selectAll` role in the Edit menu | macOS never delivered ⌘A to any text field, so the find box could not be cleared |

@@ -113,7 +113,7 @@ async function getSeqJsonFromPath(_filePath) {
 }
 
 function waitTillAppReady() {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const waitTillReadyInterval = setInterval(() => {
       if (isAppReady) {
         resolve();
