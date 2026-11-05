@@ -113,7 +113,13 @@ recent-files menu.
 
 ## Licence
 
-This fork is MIT, like upstream. `LICENSE.md` is carried over from `ove-electron` unchanged.
+Code written for this fork is MIT (`LICENSE`).
+
+Upstream `ove-electron` contradicts itself: its `LICENSE.md` is a CC0 1.0 public-domain
+dedication while its `package.json` declares MIT. That file is kept here unchanged as
+[`LICENSE-ove-electron.md`](LICENSE-ove-electron.md) so the terms it was released under
+travel with the code. CC0 waives all rights, so releasing this fork under MIT is permitted
+either way.
 
 Bundled dependencies are permissive — MIT, ISC, Apache-2.0 and BSD; there is no GPL,
 LGPL or AGPL code in the tree (`jszip` is dual MIT/GPL and is used under MIT).
