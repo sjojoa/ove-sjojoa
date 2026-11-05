@@ -146,8 +146,26 @@
     return (seqJson && seqJson.name) || "Untitled Sequence";
   }
 
+  // Parsers that had to guess (the tagged-text reader, mostly) attach what
+  // they were unsure about here. Say it out loud rather than silently dropping
+  // a feature: these files are hand-maintained and they drift.
+  function warn(title, messages) {
+    if (!messages || !messages.length) return;
+    if (!window.toastr) return;
+    // OVE's toastr is a thin wrapper over Blueprint's toaster: (message,
+    // options), not jQuery toastr's (message, title, options). One toast per
+    // warning, so a long one does not push the others off screen.
+    messages.forEach((message) => {
+      window.toastr.warning(`${title}: ${message}`, { timeout: 15000 });
+    });
+  }
+
   function addDoc({ seqJson, filePath, activate: makeActive = true }) {
     const id = `doc${++counter}`;
+    if (seqJson && seqJson.__taggedWarnings) {
+      warn("Read as tagged text", seqJson.__taggedWarnings);
+      delete seqJson.__taggedWarnings;
+    }
     const container = document.createElement("div");
     container.className = "ove-doc";
     docsHolder.appendChild(container);
@@ -373,6 +391,7 @@
     window.api.on("ove_closeTab", ({ docId }) => closeDoc(docId));
     window.api.on("ove_selectAll", selectAll);
     window.api.on("ove_find", focusFind);
+    window.api.on("ove_warn", ({ title, messages }) => warn(title, messages));
 
     addDoc(first);
     // tell the main process it is safe to push tabs to this window now
@@ -383,6 +402,7 @@
     init,
     selectAll,
     focusFind,
+    warn,
     addDoc,
     closeDoc,
     renameDoc,

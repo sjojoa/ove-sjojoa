@@ -14,6 +14,9 @@ const handleSave =
       { name: "Fasta", extensions: ["fasta"] },
       { name: "TeselaGen JSON", extensions: ["json"] },
       { name: "Bed", extensions: ["bed"] },
+      // the lab's inline-tagged format: features written between the bases,
+      // which is what gets pasted into notes and protocols
+      { name: "Tagged text", extensions: ["txt"] },
     ];
 
     let nameToUse;

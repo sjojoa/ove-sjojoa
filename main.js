@@ -13,6 +13,19 @@ let isMacOpenTriggered = false;
 // be closed automatically when the JavaScript object is garbage collected.
 const windows = [];
 const recentFiles = require("./src/main_utils/recentFiles");
+const taggedText = require("./src/features/taggedText");
+
+// Colours for the tagged-text exporter: a feature's colour is only worth
+// writing out when it is not simply the colour its type already gets.
+const featureTypeColor = (type) => {
+  try {
+    return (require("@teselagen/sequence-utils").getFeatureToColorMap({
+      includeHidden: true,
+    }) || {})[type];
+  } catch (e) {
+    return undefined;
+  }
+};
 
 const rebuildMenu = () =>
   createMenu({ windows, createWindow, getSeqJsonFromPath, openPath });
@@ -102,6 +115,19 @@ async function getSeqJsonFromPath(_filePath) {
   try {
     if (fileName.endsWith(".json") && (data.sequence || data.proteinSequence)) {
       return data;
+    }
+    // The lab's inline-tagged format: bio-parsers would read it as one long
+    // run of bases with the tags treated as garbage, so catch it first. A .txt
+    // file is only tagged text if it actually carries tag pairs; a plain
+    // sequence in a .txt still goes to bio-parsers.
+    const asText = data.toString("utf8");
+    if (taggedText.looksTagged(asText)) {
+      const { sequenceData, warnings } = taggedText.taggedToSequenceData(asText);
+      if (!sequenceData.name || sequenceData.name === "Untitled Sequence") {
+        sequenceData.name = fileName.replace(/\.[^.]*$/, "");
+      }
+      if (warnings.length) sequenceData.__taggedWarnings = warnings;
+      return sequenceData;
     }
     const res = await bioParsers.anyToJson(data, { fileName });
     return res[0].parsedSequence;
@@ -273,6 +299,19 @@ ipcMain.handle(
       formattedSeqString = bioParsers.jsonToBed(sequenceDataToSave);
     } else if (ext === ".json") {
       formattedSeqString = JSON.stringify(sequenceDataToSave, null, 2);
+    } else if (ext === ".txt") {
+      const rendered = taggedText.renderTagged(sequenceDataToSave, {
+        attrs: "minimal",
+        typeColor: featureTypeColor,
+      });
+      formattedSeqString = rendered.text;
+      if (rendered.warnings.length) {
+        browserWindow &&
+          browserWindow.webContents.send("ove_warn", {
+            title: "Exported as tagged text",
+            messages: rendered.warnings,
+          });
+      }
     } else {
       formattedSeqString = bioParsers.jsonToGenbank(sequenceDataToSave);
     }

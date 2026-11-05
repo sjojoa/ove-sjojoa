@@ -60,6 +60,14 @@ Owczarzy (2008) salt correction, and match Biopython's `Tm_NN` to within 0.001 �
   circular sequences). Residues no feature annotates are drawn in grey, so inferred sequence is
   never mistaken for annotated coding sequence. Features that already end in a stop codon are
   not extended, and separate frames or strands stay on separate rows.
+- **Inline-tagged ("rogala") text, in and out**
+  ([`src/features/taggedText.js`](src/features/taggedText.js)). Opening a `.txt` whose bases
+  carry `[Name]…[/Name]` tags builds a real annotated sequence — types, strands, colours,
+  spliced `#1`/`#2` segments, and the lab's convention that a backslash on the *opening* tag
+  (`[\AmpR]…[AmpR]`) means the reverse strand. Saving to `.txt` writes the sequence back out
+  the same way, emitting only what differs from the defaults so the text stays readable in an
+  email. Parsing is deliberately forgiving — hand-maintained files drift — and anything it had
+  to guess or drop is shown as a warning instead of being swallowed.
 - **⌘A behaves like ⌘A** — selects the text in the find box when a field has focus, and the
   whole sequence otherwise
 - **⌘F always opens or re-arms the find box** — pressed again while already in it, it selects

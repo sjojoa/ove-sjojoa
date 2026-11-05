@@ -82,6 +82,7 @@ module.exports = function createMenu({ createWindow, getSeqJsonFromPath, openPat
                     "ffn",
                     "gff",
                     "gff3",
+                    "txt", // the lab's inline-tagged format
                   ],
                 },
               ],
