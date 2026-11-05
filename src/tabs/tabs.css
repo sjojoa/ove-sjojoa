@@ -93,8 +93,11 @@ body.ove-has-tabs {
   display: block;
 }
 /* OVE's fullscreen editor pins itself to the viewport, which would sit under
-   the tab strip. Constrain it to its own tab instead. */
-.ove-doc .veEditor,
+   the tab strip. Constrain it to its own tab instead.
+   Not .tg-simple-dna-view: the small previews inside tools (the PCR product,
+   for one) also carry .veEditor, and stretching those to fill the tab painted
+   them over the tool's own controls. */
+.ove-doc .veEditor:not(.tg-simple-dna-view),
 .ove-doc .previewModeFullscreen,
 .ove-doc .tgSimpleViewFullscreen {
   position: absolute !important;
