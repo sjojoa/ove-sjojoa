@@ -118,6 +118,19 @@ module.exports = function createMenu({ createWindow, getSeqJsonFromPath, openPat
             if (win && !win.isDestroyed()) win.webContents.send("ove_selectAll");
           },
         },
+        {
+          // The find bar's own input swallows Cmd+F (its keydown handler calls
+          // preventDefault and then does nothing), and OVE's mod+f hotkey never
+          // fires from inside a text field, so pressing Cmd+F a second time was
+          // a no-op. An accelerator here is seen before the page gets the key,
+          // and the renderer decides: open the find bar, or, if it is already
+          // open, select whatever is in it so typing or pasting replaces it.
+          label: "Find\u2026",
+          accelerator: "CmdOrCtrl+F",
+          click: (menuItem, win) => {
+            if (win && !win.isDestroyed()) win.webContents.send("ove_find");
+          },
+        },
         // ...(isMac ? [
         //   { role: 'pasteAndMatchStyle' },
         //   { role: 'delete' },

@@ -333,6 +333,32 @@
     if (length) doc.editor.updateEditor({ selectionLayer: { start: 0, end: length - 1 } });
   }
 
+  // ------------------------------------------------------------ find (Cmd+F)
+  // Routed here from the Edit menu, because neither the editor's own mod+f
+  // hotkey nor the find input's keydown handler does anything useful once the
+  // caret is inside the find box. Open it if it is closed; if it is already
+  // open, focus it and select its text so the next thing typed or pasted
+  // replaces the old query.
+  function focusFind() {
+    const doc = getActive();
+    if (!doc || !doc.editor) return;
+    const box = doc.container || document;
+    const find = () =>
+      box.querySelector("textarea.tg-find-tool-input") ||
+      box.querySelector(".tg-find-tool-input input");
+    const select = (el) => {
+      if (!el) return false;
+      el.focus();
+      if (typeof el.select === "function") el.select();
+      return true;
+    };
+    if (select(find())) return;
+    doc.editor.updateEditor({ findTool: { isOpen: true } });
+    // the bar mounts on the next render; it autofocuses itself, but select the
+    // text anyway in case it opened with a previous query still in it
+    setTimeout(() => select(find()), 0);
+  }
+
   // --------------------------------------------------------------- setup
   function init(first) {
     buildChrome();
@@ -346,6 +372,7 @@
     });
     window.api.on("ove_closeTab", ({ docId }) => closeDoc(docId));
     window.api.on("ove_selectAll", selectAll);
+    window.api.on("ove_find", focusFind);
 
     addDoc(first);
     // tell the main process it is safe to push tabs to this window now
@@ -355,6 +382,7 @@
   window.oveTabs = {
     init,
     selectAll,
+    focusFind,
     addDoc,
     closeDoc,
     renameDoc,

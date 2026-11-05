@@ -118,3 +118,29 @@ describe("Select All", () => {
     assert.deepStrictEqual(sent, []);
   });
 });
+
+describe("Find", () => {
+  const findItem = () => {
+    createMenu({ createWindow() {}, getSeqJsonFromPath() {}, openPath() {} });
+    return editMenu().submenu.find((i) => i.label === "Find…");
+  };
+
+  it("claims Cmd+F, which the find bar's own input would otherwise swallow", () => {
+    assert.strictEqual(findItem().accelerator, "CmdOrCtrl+F");
+  });
+
+  it("asks the renderer to open the find bar or reselect its text", () => {
+    const sent = [];
+    const win = { isDestroyed: () => false, webContents: { send: (...a) => sent.push(a) } };
+    findItem().click(null, win);
+    assert.deepStrictEqual(sent, [["ove_find"]]);
+  });
+
+  it("does nothing when the window is already gone", () => {
+    const sent = [];
+    const win = { isDestroyed: () => true, webContents: { send: (...a) => sent.push(a) } };
+    findItem().click(null, win);
+    findItem().click(null, undefined);
+    assert.deepStrictEqual(sent, []);
+  });
+});

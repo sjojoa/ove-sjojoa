@@ -62,9 +62,12 @@ Owczarzy (2008) salt correction, and match Biopython's `Tm_NN` to within 0.001 �
   not extended, and separate frames or strands stay on separate rows.
 - **⌘A behaves like ⌘A** — selects the text in the find box when a field has focus, and the
   whole sequence otherwise
+- **⌘F always opens or re-arms the find box** — pressed again while already in it, it selects
+  the current query, so pasting a new sequence replaces the old one
 
 ### Upstream bugs fixed
-These are patched at install time by [`scripts/patch-ove.js`](scripts/patch-ove.js):
+Most are patched at install time by [`scripts/patch-ove.js`](scripts/patch-ove.js); the two
+keyboard ones are handled by this app's own Edit menu:
 
 | Bug | Effect |
 |---|---|
@@ -78,6 +81,7 @@ These are patched at install time by [`scripts/patch-ove.js`](scripts/patch-ove.
 | one translation row per CDS feature | a tag + linker + gene in one frame stacked three rows of the same protein |
 | CDS translations truncated at the feature boundary | a mis-annotated CDS hid the real reading frame; now it reads through to the stop codon |
 | no `selectAll` role in the Edit menu | macOS never delivered ⌘A to any text field, so the find box could not be cleared |
+| ⌘F dead once the caret is in the find box | the input swallowed the key and the editor's own hotkey never fires inside a text field, so a second ⌘F did nothing; it now selects the query so the next thing typed or pasted replaces it |
 
 ## Installing the app
 
