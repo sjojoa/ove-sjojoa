@@ -131,3 +131,15 @@ body.ove-has-tabs {
 #ove-drag-hint.ove-visible {
   display: block;
 }
+/* Version History renders through a portal on <body> with a fixed, full-window
+   box, so it escapes #ove-docs entirely and its Back button lands underneath
+   the tab strip — clicking Back just selected a tab and there was no way out of
+   the view. Start it below the strip instead. The inline width/height come from
+   the window size, hence the !important and the inner height override. */
+body.ove-has-tabs .veVersionHistoryViewContainer {
+  top: 32px !important;
+  height: calc(100% - 32px) !important;
+}
+body.ove-has-tabs .veVersionHistoryViewContainer > .veVersionHistoryView {
+  height: 100% !important;
+}

@@ -81,6 +81,7 @@ keyboard ones are handled by this app's own Edit menu:
 | one translation row per CDS feature | a tag + linker + gene in one frame stacked three rows of the same protein |
 | CDS translations truncated at the feature boundary | a mis-annotated CDS hid the real reading frame; now it reads through to the stop codon |
 | no `selectAll` role in the Edit menu | macOS never delivered ⌘A to any text field, so the find box could not be cleared |
+| Version History drawn under the tab strip | its Back button was unclickable, so opening version history stranded you with no menu bar and no way back |
 | ⌘F dead once the caret is in the find box | the input swallowed the key and the editor's own hotkey never fires inside a text field, so a second ⌘F did nothing; it now selects the query so the next thing typed or pasted replaces it |
 
 ## Installing the app
