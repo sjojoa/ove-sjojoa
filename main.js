@@ -6,7 +6,6 @@ const bioParsers = require("bio-parsers");
 const fs = require("fs");
 const createMenu = require("./src/main_utils/menu");
 const windowStateKeeper = require("electron-window-state");
-const { autoUpdater } = require("electron-updater");
 
 let isAppReady = false;
 let isMacOpenTriggered = false;
@@ -219,7 +218,8 @@ app.on("open-file", async (event, path) => {
 // Some APIs can only be used after this event occurs.
 app.on("ready", async () => {
   console.info(`App Starting Up`);
-  autoUpdater.checkForUpdatesAndNotify();
+  // No auto-update: this fork publishes no update feed, and the updater threw
+  // an unhandled rejection on every launch looking for one.
   isAppReady = true;
   if (!windows.length && !isMacOpenTriggered) {
     // Files to open are argv[1..] in a packaged app but argv[2..] under

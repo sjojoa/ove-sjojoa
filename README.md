@@ -79,13 +79,34 @@ These are patched at install time by [`scripts/patch-ove.js`](scripts/patch-ove.
 | CDS translations truncated at the feature boundary | a mis-annotated CDS hid the real reading frame; now it reads through to the stop codon |
 | no `selectAll` role in the Edit menu | macOS never delivered ⌘A to any text field, so the find box could not be cleared |
 
-## Install
+## Installing the app
+
+Download the `.dmg` for your Mac from the
+[Releases page](https://github.com/sjojoa/ove-sjojoa/releases) — `-arm64` for Apple
+Silicon (M1 and later), `-intel` for older Macs. Open it and drag **OVE-sjojoa** into
+Applications.
+
+The app is not signed with an Apple Developer certificate, so the first launch is
+blocked. Either:
+
+- open it once from Finder, then go to **System Settings → Privacy & Security** and
+  click **Open Anyway** next to the message about OVE-sjojoa; or
+- clear the download flag from a terminal:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/OVE-sjojoa.app
+```
+
+Only needed once. Nothing in the app phones home: there is no auto-update, no
+telemetry, and no account.
+
+## Building from source
 
 Requires Node 18+ (built against Electron 22).
 
 ```bash
-git clone <this repo>
-cd ove-rogala
+git clone https://github.com/sjojoa/ove-sjojoa.git
+cd ove-sjojoa
 yarn install   # postinstall applies scripts/patch-ove.js
 yarn start
 ```
@@ -97,19 +118,37 @@ freshly downloaded `open-vector-editor` on every install; it is idempotent and o
 
 ```bash
 yarn test            # unit tests
+yarn lint            # eslint
 yarn build-local-mac # unsigned local .app (no Apple Developer account needed)
+yarn build-dmg       # .dmg installers for both Mac architectures, into dist/installers
 yarn build-mac       # signed/notarised build; needs APPLEID + APPLEIDPASS
 ```
 
-## Tests
+## What has been tested
 
-```
-yarn test
-```
+**Used in real work**
 
-39 tests covering the aligner, mismatch descriptions, Tm (against Biopython reference
-values), primer design, restriction cloning, mutagenesis, Gibson assembly, gels, and the
-recent-files menu.
+- **Sanger read alignment** — the reason this fork exists; run on real sequencing reads
+  against real references, including reverse-strand reads and auto-trimming. The mismatch
+  arrows and their `c.`/`p.` descriptions have been read off real traces.
+- **Adding features and primers** — annotating sequences in the editor, including the
+  per-feature colours added here, and round-tripping them through `.gb`.
+
+**Everything else is unvalidated.** The Cloning menu (primer design, restriction cloning,
+mutagenesis, Gibson assembly, the gel simulator) and the CDS read-through translations are
+implemented and covered by unit tests, but those tests check that the code does what it was
+designed to do — they are not validation against a wet-lab result or against another tool.
+Nothing here has been used to plan a cloning experiment that was then carried out. Treat the
+output as a starting point and check it before ordering oligos.
+
+The one independent comparison: melting temperatures match Biopython's `Tm_NN`
+(SantaLucia 1998 nearest-neighbour parameters with the Owczarzy 2008 salt correction) to
+within 0.001 °C across 200 random primers under four buffer conditions. That validates the
+Tm arithmetic, not the primer-design decisions built on top of it.
+
+```bash
+yarn test   # 63 unit tests
+```
 
 ## Licence
 

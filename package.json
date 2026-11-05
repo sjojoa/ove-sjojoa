@@ -12,7 +12,8 @@
     "build-mac": "env-cmd electron-builder --mac --publish never",
     "build-win": "env-cmd electron-builder --win --publish never",
     "build-linux": "env-cmd electron-builder --linux --publish never",
-    "build-local-mac": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dir --arm64 --publish never -c.mac.identity=null"
+    "build-local-mac": "CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dir --arm64 --publish never -c.mac.identity=null",
+    "build-dmg": "bash scripts/make-dmg.sh"
   },
   "build": {
     "appId": "io.github.sjojoa.ove",
@@ -88,7 +89,6 @@
   "dependencies": {
     "@teselagen/sequence-utils": "0.1.24",
     "bio-parsers": "^9.0.1",
-    "electron-updater": "^5.3.0",
     "electron-window-state": "^5.0.3",
     "open-vector-editor": "18.3.6",
     "ove-auto-annotate": "^0.0.5",
