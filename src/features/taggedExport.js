@@ -11,6 +11,18 @@
     }
   };
 
+  // the editor's Copy Options (File > Copy Options), defaulted the way OVE
+  // defaults them
+  function copyOptions() {
+    const doc = window.oveTabs && window.oveTabs.getActive();
+    const defaults = { features: true, partialFeatures: false, parts: true, partialParts: false };
+    try {
+      return Object.assign(defaults, doc.editor.getState().copyOptions);
+    } catch (e) {
+      return defaults;
+    }
+  }
+
   function activeSequence() {
     const doc = window.oveTabs && window.oveTabs.getActive();
     if (!doc || !doc.editor) return null;
@@ -41,6 +53,63 @@
     window.oveCloningUI && window.oveCloningUI.toast(`Exported ${name}.txt`);
   }
 
+  // Right-click a selection > Copy as tagged text. Copying the whole file is
+  // the rare case; usually what you want pasted into a protocol is the insert,
+  // the cassette or the region you just selected, with its features riding
+  // along. Annotations are clipped to the selection and renumbered, which the
+  // format does for free since its coordinates are implicit.
+  function copyAsTagged(range) {
+    const seqData = activeSequence();
+    if (!seqData || !window.oveTaggedText) return;
+    const su = window.sequenceUtils;
+    const whole = !range || typeof range.start !== "number" || range.start < 0;
+    let part = seqData;
+    if (!whole && su && su.getSequenceDataBetweenRange) {
+      // follow the editor's own Copy Options, so this behaves like Copy does:
+      // by default a feature only half inside the selection is left out
+      const opts = copyOptions();
+      part = su.getSequenceDataBetweenRange(
+        seqData,
+        { start: range.start, end: range.end },
+        {
+          exclude: { features: !opts.features, parts: !opts.parts },
+          excludePartial: {
+            features: !opts.partialFeatures,
+            primers: !opts.partialFeatures,
+            parts: !opts.partialParts,
+          },
+        }
+      );
+      part = Object.assign({}, part, {
+        name: `${seqData.name || "sequence"}_${range.start + 1}-${range.end + 1}`,
+      });
+    }
+    const { text, warnings } = window.oveTaggedText.renderTagged(part, {
+      attrs: "minimal",
+      typeColor,
+    });
+    // the header is for files; a clipboard paste wants the bases and nothing else
+    const body = text.replace(/^(#[^\n]*\n)+\n?/, "").trim();
+    const ui = window.oveCloningUI;
+    if (ui) ui.copyText(body, `${whole ? "Sequence" : `${body.replace(/\[[^\]]*\]/g, "").length} bp`} as tagged text`);
+    if (warnings.length && window.oveTabs) window.oveTabs.warn("Copied as tagged text", warnings);
+  }
+
+  // OVE hands the right-click menu through this hook before showing it.
+  const rightClickOverrides = {
+    selectionLayerRightClicked: (items, opts) => {
+      const entry = {
+        text: "Copy as Tagged Text",
+        onClick: () => copyAsTagged(opts && opts.annotation),
+      };
+      // sits with the other copy commands, not at the bottom of the menu
+      const next = [...items];
+      const i = next.findIndex((item) => item && item.text === "Copy");
+      next.splice(i === -1 ? next.length : i + 1, 0, entry);
+      return next;
+    },
+  };
+
   // stable reference: OVE memoizes on the identity of menuFilter
   function menuFilter(menu) {
     return menu.map((top) => {
@@ -59,5 +128,5 @@
     });
   }
 
-  window.oveTaggedExport = { download, menuFilter };
+  window.oveTaggedExport = { download, menuFilter, copyAsTagged, rightClickOverrides };
 })();

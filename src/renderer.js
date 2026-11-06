@@ -90,6 +90,7 @@ window.oveMakeEditor = function oveMakeEditor(container, doc, restoring) {
   handleAlignment: window.oveLocalAligner.handleAlignment,
   // adds the "Cloning" menu (src/cloning/cloningTools.js)
   menuFilter: MENU_FILTER,
+  rightClickOverrides: window.oveTaggedExport.rightClickOverrides,
   isFullscreen: true,
   // or you can pass "createDomNodeForMe" but make sure to use editor.close() to clean up the dom node!
 
