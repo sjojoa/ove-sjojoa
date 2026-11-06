@@ -84,6 +84,16 @@ Owczarzy (2008) salt correction, and match Biopython's `Tm_NN` to within 0.001 �
   off those). Per sequence, from a default set that newly opened files start with. This
   replaced a whole-oligo alignment with a flat two-mismatch budget, which rejected every
   primer carrying a 5′ tail — exactly the primers this fork exists for.
+- **Tm and GC of the selection, in the status bar and the hover title**
+  ([`selectionStats.js`](src/features/selectionStats.js)) — select a primer-sized stretch
+  and the status bar reads `Selecting 20 bps from 151 to 170 · Tm 58.3 °C · 45% GC`, so a
+  candidate primer can be judged without opening a tool. The Tm is this fork's own
+  (SantaLucia 1998 nearest-neighbour with the Owczarzy 2008 salt correction), not
+  upstream's, which reads about 5 °C higher and would have disagreed with every number the
+  Cloning menu prints. **Tm conditions** in the status bar states the model and the primer
+  and salt concentrations behind it. Above 40 bp the line carries GC alone: a
+  nearest-neighbour Tm of a kilobase is not a quantity to act on. Both View-menu toggles
+  still work and both default on.
 - **Simulate PCR takes a pasted primer**
   ([`pastedPrimers.js`](src/features/pastedPrimers.js)) — upstream only let you pick primers
   that were already annotations, so checking "what does this amplify?" meant creating two
@@ -152,6 +162,8 @@ keyboard ones are handled by this app's own Edit menu:
 | Import Sequence went straight to a file picker | no way to get a sequence in from the clipboard |
 | ⌘F dead once the caret is in the find box | the input swallowed the key and the editor's own hotkey never fires inside a text field, so a second ⌘F did nothing; it now selects the query so the next thing typed or pasted replaces it |
 | Primer/Oligo Analyzer aligned the whole oligo with a 2-mismatch budget | every primer with a 5′ tail — Gibson overlaps, restriction sites, tagged primers — reported zero binding sites; now the 3′ end anchors the site and the tail is reported as a tail |
+| GC content and Tm of a selection both shipped switched off | two settings nobody finds, so the commonest question about a selection — is this a usable primer? — meant opening a tool |
+| status bar Tm disagreed with the Cloning menu's by ~5 °C | the same bases got two different melting temperatures depending on where you looked; the status bar now uses the fork's model (`calculateNebTm` also returned `NaN` as the component called it) |
 | no per-base view of how a primer pairs | the Add/Edit Primer dialog showed bases and coordinates but never whether they pair where they claim to |
 
 ## Installing the app

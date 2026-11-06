@@ -318,3 +318,18 @@ details.ove-cl-details summary {
 .ove-ph-compact .ove-ph-line {
   font-size: 12px;
 }
+
+/* --- Tm/GC of the selection (src/features/selectionStats.js) ------------- */
+/* The status bar states the number; this is where the conditions behind it
+   live, because a Tm without its salt and primer concentrations is not a
+   number anyone can check. */
+.ove-tmcond-link {
+  cursor: pointer;
+  color: #48aff0;
+}
+.ove-tmcond p {
+  margin: 0 0 10px;
+}
+.ove-tmcond p:last-child {
+  margin-bottom: 0;
+}

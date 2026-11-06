@@ -149,6 +149,22 @@ const patches = [
     to: "    noResultsText: \"No reverse primer annotations on this sequence \\u2014 paste bases above instead\",",
   },
   {
+    // GC was already computed here behind the showGCContent flag; Tm was a
+    // separate status bar item quoting a different model. One suffix now
+    // carries both, so the status bar line and the selection's hover title
+    // agree with each other and with the Cloning menu.
+    name: "Tm and GC in the selection message",
+    from: '(showGCContent && !isProtein ? " (" + GCContent(GCDecimalDigits) + "% GC)" : "")',
+    to: '(window.oveSelectionStats ? window.oveSelectionStats.suffix({ selectionLayer: _selectionLayer, sequenceData: sequenceData, showGCContent: showGCContent, GCDecimalDigits: GCDecimalDigits, isProtein: isProtein }) : (showGCContent && !isProtein ? " (" + GCContent(GCDecimalDigits) + "% GC)" : ""))',
+  },
+  {
+    // upstream's Tm item would print a second, different number next to the
+    // one in the selection line; ours states the conditions instead
+    name: "status bar Tm item states the conditions",
+    from: "showMeltingTemp && /*#__PURE__*/react_default.a.createElement(MeltingTemp, {\n    WrapperToUse: StatusBarItem,\n    sequence: sequence\n  })",
+    to: "showMeltingTemp && (window.oveSelectionStats ? window.oveSelectionStats.statusItem(react_default.a, StatusBarItem, sequence) : /*#__PURE__*/react_default.a.createElement(MeltingTemp, {\n    WrapperToUse: StatusBarItem,\n    sequence: sequence\n  }))",
+  },
+  {
     name: "alignment tool note reflects the built-in local aligner",
     from: "Note: This tool requires an alignment server to be hooked up for it to work properly. It will NOT work in the OVE demo page.",
     to: "Alignments run locally on this computer (no server needed). Tip: add .ab1 files, tick \\\"Align Sequencing Reads to Reference Sequence\\\" and optionally \\\"Auto-Trim\\\".",

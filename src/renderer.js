@@ -106,6 +106,10 @@ window.oveMakeEditor = function oveMakeEditor(container, doc, restoring) {
   //you can also pass a DOM node as the first arg here
   // showReadOnly: false,
   // disableSetReadOnly: true,
+  // Tm and GC of the selection (src/features/selectionStats.js). GC is a
+  // whole number here because a tenth of a percent of a 20-mer is noise.
+  showGCContentByDefault: true,
+  GCDecimalDigits: 0,
   allowPrimerBasesToBeEdited: true,
   defaultLinkedOligoMessage: '',
   shouldAutosave: false,
