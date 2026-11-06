@@ -6,13 +6,17 @@
 // this block above those dropdowns and merges whatever it places into the
 // primer list the tool reads, so the editor's own product assembly — which
 // already honours a primer's 5' tail through primer.bases — does the rest.
+//
+// Each slot is a primer hybridisation view (features/primerView.js), so the
+// same per-base pairing, site list and parameters are here as in the Analyzer;
+// this file only decides which of the sites found is the one the PCR tool gets.
 (function () {
   const FIELDS = {
     forward: { field: "forwardPrimer", label: "Forward", id: "ovePastedForward" },
     reverse: { field: "reversePrimer", label: "Reverse", id: "ovePastedReverse" },
   };
 
-  // what has been placed, per direction: { bases, binding, primer, name }
+  // what has been placed, per direction: { bases, site, primer, name }
   const placed = {};
   let props = null;
   let root = null;
@@ -33,23 +37,10 @@
     return out;
   }
 
-  function describeSite(binding) {
-    const site = binding.site;
-    const where = `${oneBased(site.start)}–${oneBased(site.end)}`;
-    const strand = site.bottomStrand ? "bottom strand" : "top strand";
-    const bits = [`binds ${where} (${strand})`];
-    bits.push(`${binding.annealLength} nt annealing`);
-    if (binding.tail) bits.push(`${binding.tail.length} nt 5′ tail`);
-    if (binding.mismatches) bits.push(`${binding.mismatches} mismatch${binding.mismatches > 1 ? "es" : ""}`);
-    const D = window.dnaTools;
-    if (D) bits.push(`Tm ${D.tm(binding.annealSeq).toFixed(1)} °C`);
-    return bits.join(" · ");
-  }
-
   function pairNote() {
     const D = window.dnaTools;
-    const f = placed.forward && placed.forward.binding;
-    const r = placed.reverse && placed.reverse.binding;
+    const f = placed.forward && placed.forward.site;
+    const r = placed.reverse && placed.reverse.site;
     if (!D || !f || !r) return null;
     const temps = D.annealingTemps(D.tm(f.annealSeq), D.tm(r.annealSeq));
     return `Anneal at ${temps.taq} °C (Taq) or ${temps.hifi} °C (Q5/Phusion).`;
@@ -57,40 +48,42 @@
 
   // ---------------------------------------------------------------- slots
 
-  function place(key) {
+  // The PCR tool needs one site per direction, so of everything the view found
+  // this picks the one the product will actually come off: the site being
+  // looked at if it points the right way, otherwise the best one that does.
+  function chooseSite(key, view, result) {
+    const wantBottom = key === "reverse";
+    const active = view.getSite();
+    if (active && active.bottomStrand === wantBottom && !active.fivePrimeOnly) return active;
+    return result.sites.find((s) => s.bottomStrand === wantBottom && !s.fivePrimeOnly) || null;
+  }
+
+  function onChange(key, result, bases) {
     const slot = slots[key];
     const spec = FIELDS[key];
     const U = ui();
-    const bases = slot.input.value;
-    slot.report.innerHTML = "";
+    slot.note.innerHTML = "";
     slot.save.style.display = "none";
 
-    if (!bases.trim()) {
+    const clear = () => {
       delete placed[key];
       if (props && props.change) props.change(spec.field, undefined);
-      return;
-    }
+    };
 
-    const binding = window.ovePrimerBinding.bindPrimer(template(), bases, {
-      isCircular: isCircular(),
-    });
+    if (!bases) return clear();
+    if (!result.sites.length) return clear(); // the view already says why
 
-    if (!binding.ok) {
-      delete placed[key];
-      slot.report.appendChild(U.callout(binding.reason, "danger"));
-      return;
-    }
-
-    if (binding.orientation !== key) {
-      // placing it anyway would silently amplify nothing
-      delete placed[key];
-      slot.report.appendChild(
+    const site = chooseSite(key, slot.view, result);
+    if (!site) {
+      clear();
+      const other = result.sites[0];
+      slot.note.appendChild(
         U.callout(
-          `This primer anneals the other way round — it binds ${oneBased(binding.site.start)}–${oneBased(
-            binding.site.end
-          )} as a ${binding.orientation} primer. Paste it in the ${
-            FIELDS[binding.orientation].label
-          } box instead.`,
+          `This primer anneals the other way round — it binds ${oneBased(other.start)}–${oneBased(
+            other.end
+          )} as a ${other.bottomStrand ? "reverse" : "forward"} primer. Paste it in the ${
+            FIELDS[other.bottomStrand ? "reverse" : "forward"].label
+          } box instead, or reverse-complement it.`,
           "warning"
         )
       );
@@ -98,27 +91,22 @@
     }
 
     const name = slot.name.value.trim() || `Pasted ${spec.label.toLowerCase()} primer`;
-    const primer = window.ovePrimerBinding.virtualPrimer(binding, { id: spec.id, name });
-    placed[key] = { bases, binding, primer, name };
-
-    slot.report.appendChild(U.callout(describeSite(binding), binding.mismatches ? "warning" : "success"));
-    if (binding.sites.length > 1) {
-      // the answer to "why did I get two bands"
-      const others = binding.sites
-        .slice(1, 6)
-        .map((s) => `${oneBased(s.start)}–${oneBased(s.end)}${s.bottomStrand ? " (bottom)" : ""}`)
-        .join(", ");
-      slot.report.appendChild(
-        U.callout(
-          `Binds in ${binding.sites.length} places — the product uses the first. Others: ${others}${
-            binding.sites.length > 6 ? ", …" : ""
-          }`,
-          "warning"
-        )
-      );
-    }
+    const primer = {
+      id: spec.id,
+      name,
+      start: site.start,
+      end: site.end,
+      forward: !site.bottomStrand,
+      bases: (site.tail + site.annealSeq).toUpperCase(),
+      type: "primer_bind",
+      ovePasted: true,
+    };
+    placed[key] = { bases, site, primer, name };
+    slot.note.appendChild(
+      U.callout(`Using ${oneBased(site.start)}–${oneBased(site.end)} for the PCR product.`, site.mismatchCount ? "warning" : "success")
+    );
     const note = pairNote();
-    if (note) slot.report.appendChild(U.callout(note, "primary"));
+    if (note) slot.note.appendChild(U.callout(note, "primary"));
     slot.save.style.display = "";
 
     if (props && props.change) props.change(spec.field, spec.id);
@@ -154,30 +142,27 @@
     const U = ui();
     const { h, button, textInput } = U;
     const spec = FIELDS[key];
-    const input = h("textarea", {
-      className: "bp3-input bp3-fill ove-cl-mono",
-      rows: 2,
-      placeholder: `Paste ${spec.label.toLowerCase()} primer bases, 5′→3′ (a 5′ tail is fine)`,
-    });
     const name = textInput("", { placeholder: `Pasted ${spec.label.toLowerCase()} primer`, width: 180 });
-    const report = h("div", { className: "ove-pasted-report" });
+    const note = h("div", { className: "ove-pasted-report" });
     const save = button("Save as annotation", () => saveAsAnnotation(key), { icon: "floppy-disk" });
     save.style.display = "none";
-    const use = button("Use", () => place(key), { intent: "primary", icon: "locate" });
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        place(key);
-      }
+    const doc = window.oveTabs && window.oveTabs.getActive();
+    const view = window.ovePrimerView.create({
+      template,
+      isCircular,
+      compact: true,
+      docKey: (doc && doc.id) || "default",
+      placeholder: `Paste ${spec.label.toLowerCase()} primer bases, 5′→3′ (a 5′ tail is fine)`,
+      onChange: (result, bases) => onChange(key, result, bases),
     });
-    slots[key] = { input, name, report, save, use };
+    slots[key] = { view, name, note, save };
     return h(
       "div",
       { className: "ove-pasted-slot" },
       h("div", { className: "ove-pasted-slot-head" }, `${spec.label} primer from bases`),
-      input,
-      h("div", { className: "ove-cl-row" }, name, use, save),
-      report
+      view.el,
+      h("div", { className: "ove-cl-row" }, name, save),
+      note
     );
   }
 
@@ -209,5 +194,5 @@
     return React.createElement("div", { className: "ove-pasted-primers", ref });
   }
 
-  window.ovePastedPrimers = { render, ref, virtual, place, saveAsAnnotation };
+  window.ovePastedPrimers = { render, ref, virtual, saveAsAnnotation, slots };
 })();

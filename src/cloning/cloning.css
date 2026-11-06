@@ -216,3 +216,105 @@ details.ove-cl-details summary {
   margin: 4px 0 0;
   font-size: 12px;
 }
+
+/* ------------------------------------------- primer hybridisation view */
+.ove-ph {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.ove-ph-input {
+  min-height: 44px;
+  resize: vertical;
+}
+.ove-ph-toolbar {
+  flex-wrap: wrap;
+  align-items: center;
+}
+.ove-ph-stats {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+.ove-ph-chip {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 9px;
+  background: rgba(138, 155, 168, 0.2);
+  white-space: nowrap;
+}
+.ove-ph-params {
+  border: 1px solid rgba(138, 155, 168, 0.35);
+  border-radius: 3px;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+.ove-ph-param-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 3px 0;
+}
+.ove-ph-param-row .ove-cl-hint {
+  margin-top: 0;
+}
+/* The alignment is monospace and must not reflow: a wrapped alignment is a
+   wrong alignment, so it scrolls sideways instead. */
+.ove-ph-alignscroll {
+  overflow-x: auto;
+  padding: 4px 2px;
+}
+.ove-ph-line {
+  font-family: "Ubuntu Mono", Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.25;
+  white-space: pre;
+}
+.ove-ph-bars {
+  opacity: 0.75;
+}
+.ove-ph-good {
+  font-weight: 600;
+}
+.ove-ph-bad {
+  color: #c23030;
+  font-weight: 700;
+}
+.bp3-dark .ove-ph-bad {
+  color: #ff7373;
+}
+.ove-ph-tail {
+  color: #a66321;
+}
+.bp3-dark .ove-ph-tail {
+  color: #ffb366;
+}
+.ove-ph-template {
+  opacity: 0.85;
+}
+.ove-ph-context {
+  opacity: 0.4;
+}
+.ove-ph-end {
+  opacity: 0.5;
+}
+.ove-ph-strandnote,
+.ove-ph-siteshead {
+  font-size: 11px;
+  opacity: 0.75;
+  padding: 2px 0;
+}
+.ove-ph-siteshead {
+  font-weight: 600;
+  opacity: 0.9;
+}
+.ove-ph-sites .ove-cl-callout {
+  margin-top: 4px;
+  font-size: 12px;
+}
+.ove-ph-compact .ove-ph-line {
+  font-size: 12px;
+}

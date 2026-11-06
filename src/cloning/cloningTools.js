@@ -282,42 +282,78 @@
   }
 
   // ------------------------------------------------------ oligo analyzer
-  function findBindingSites(template, circular, oligoIn, maxMismatches = 2) {
-    const oligo = D.clean(oligoIn);
-    const L = oligo.length;
-    const n = template.length;
-    const T = template.toUpperCase();
-    const hits = [];
-    if (L < 8) return hits;
-    const scan = (probe, strand) => {
-      const limit = circular ? n : n - L + 1;
-      for (let i = 0; i < limit; i++) {
-        let mm = 0;
-        for (let k = 0; k < L && mm <= maxMismatches; k++) {
-          const t = T[(i + k) % n];
-          if (probe[k] !== t && probe[k] !== "N") {
-            // the 3′ end (last 5 nt of the primer) must match
-            const primerIdx = strand === 1 ? k : L - 1 - k;
-            if (primerIdx >= L - 5) mm = 99;
-            else mm++;
-          }
-        }
-        if (mm <= maxMismatches) hits.push({ start: i, end: (i + L - 1) % n, strand, mismatches: mm });
-      }
-    };
-    scan(oligo, 1);
-    scan(D.revcomp(oligo), -1);
-    return hits;
+  // Binding sites come from features/primerHybridization.js. The rule this
+  // replaced aligned the whole oligo and allowed two mismatches across its
+  // full length, which rejected every primer with a 5' tail — exactly the
+  // primers this app is used for. Kept as a thin shim because it was a public
+  // window.oveCloning entry point.
+  function findBindingSites(template, circular, oligoIn, maxMismatches) {
+    const params = Object.assign({}, window.ovePrimerView.defaults());
+    if (maxMismatches === 0) params.allowIsolatedMismatch = false;
+    const r = window.ovePrimerHybridization.findSites(template, oligoIn, {
+      isCircular: circular,
+      params,
+    });
+    return r.sites.map((site) => ({
+      start: site.start,
+      end: site.end,
+      strand: site.bottomStrand ? -1 : 1,
+      mismatches: site.mismatchCount,
+      site,
+    }));
   }
+
+  const activeDocKey = () => {
+    const doc = window.oveTabs && window.oveTabs.getActive();
+    return (doc && doc.id) || "default";
+  };
 
   function openOligoAnalyzer() {
     const { seqData, sel } = current();
     const selSeq = sel ? D.circSlice(seqData.sequence, sel.start, sel.end >= sel.start ? sel.end + 1 : sel.end + 1 + seqData.sequence.length, seqData.circular) : "";
-    const o1 = U.textArea(selSeq.length <= 80 ? selSeq.toUpperCase() : "", { placeholder: "Oligo 1, 5′→3′", rows: 2 });
     const o2 = U.textArea("", { placeholder: "Oligo 2 (optional), 5′→3′ – for primer-pair checks", rows: 2 });
     const cond = conditionsEditor();
     const out = h("div");
 
+    // read the sequence live rather than from the snapshot this dialog opened
+    // with: it stays open while the sequence is edited behind it
+    const live = () => {
+      const doc = window.oveTabs && window.oveTabs.getActive();
+      return (doc && doc.editor && doc.editor.getState().sequenceData) || seqData;
+    };
+    const view = window.ovePrimerView.create({
+      bases: selSeq.length <= 80 ? selSeq.toUpperCase() : "",
+      template: () => live().sequence,
+      isCircular: () => !!live().circular,
+      docKey: activeDocKey(),
+      placeholder: "Oligo 1 — primer bases, 5′→3′ (a 5′ tail is fine)",
+      rows: 2,
+      buttons: [
+        {
+          text: "Annotate this site",
+          icon: "add",
+          title: "Write the shown binding site onto the sequence as a primer",
+          onClick: (site, bases) => {
+            if (!site) return U.toast("No binding site to annotate", "warning");
+            addPrimersToCurrent([
+              {
+                name: `oligo${site.mismatchCount ? `_${site.mismatchCount}mm` : ""}`,
+                seq: bases,
+                start: site.start,
+                end: site.end,
+                forward: !site.bottomStrand,
+                note: site.tailLength ? `${site.tailLength} nt 5′ tail` : null,
+              },
+            ]);
+          },
+        },
+      ],
+      onChange: () => {
+        // the oligo cards below are about the bases, so they go stale the
+        // moment the bases change
+        out.innerHTML = "";
+      },
+    });
     const kv = (pairs) => h("dl", { className: "ove-cl-kv" }, pairs.flatMap(([k, v]) => [h("dt", {}, k), h("dd", {}, v)]));
     const oligoCard = (title, a) =>
       U.section(
@@ -335,7 +371,7 @@
 
     const analyze = wrapTry(() => {
       out.innerHTML = "";
-      const seqs = [o1.value, o2.value].map(D.clean).filter((s) => s.length >= 2);
+      const seqs = [view.getBases(), o2.value].map(D.clean).filter((s) => s.length >= 2);
       if (!seqs.length) throw new Error("Enter at least one oligo sequence");
       const analyses = seqs.map((s) => D.analyzeOligo(s, cond.get()));
       analyses.forEach((a, i) => out.appendChild(oligoCard(`Oligo ${i + 1}`, a)));
@@ -355,43 +391,16 @@
       }
     });
 
-    const bindingSites = wrapTry(() => {
-      out.innerHTML = "";
-      const seqs = [o1.value, o2.value].map(D.clean).filter((s) => s.length >= 8);
-      if (!seqs.length) throw new Error("Enter an oligo of at least 8 nt");
-      const found = [];
-      seqs.forEach((s, idx) => findBindingSites(seqData.sequence, seqData.circular, s).forEach((hit) => found.push({ ...hit, oligo: idx + 1, seq: s })));
-      found.sort((a, b) => a.mismatches - b.mismatches);
-      if (!found.length) {
-        out.appendChild(U.callout("No binding sites with ≤ 2 mismatches (and a perfect 3′ end) in this sequence.", "warning"));
-        return;
-      }
-      out.appendChild(
-        U.table(
-          [
-            { title: "Oligo", render: (r) => r.oligo },
-            { title: "Position", render: (r) => `${oneBased(r.start)}–${oneBased(r.end)}` },
-            { title: "Strand", render: (r) => (r.strand === 1 ? "top (→)" : "bottom (←)") },
-            { title: "Mismatches", render: (r) => (r.mismatches ? h("span", { className: "ove-cl-warn" }, r.mismatches) : h("span", { className: "ove-cl-ok" }, "0 (perfect)")) },
-            {
-              title: "",
-              render: (r) =>
-                U.button("Annotate", () => addPrimersToCurrent([{ name: `oligo${r.oligo}${r.mismatches ? `_${r.mismatches}mm` : ""}`, seq: r.seq, start: r.start, end: r.end, forward: r.strand === 1 }]), { minimal: true, icon: "add" }),
-            },
-          ],
-          found
-        )
-      );
-    });
-
     U.openDialog({
       title: "Primer / Oligo Analyzer",
-      width: 720,
-      body: [U.section("Oligos", o1, h("div", { style: { height: "6px" } }), o2), cond.el, out],
-      footer: [
-        U.button("Analyze", analyze, { intent: "primary", icon: "calculator" }),
-        U.button("Find binding sites in this sequence", bindingSites, { icon: "search-template" }),
+      width: 760,
+      body: [
+        U.section("Oligo 1 — where it binds on this sequence", view.el),
+        U.section("Oligo 2 (optional)", o2),
+        cond.el,
+        out,
       ],
+      footer: [U.button("Analyze Tm, hairpins and dimers", analyze, { intent: "primary", icon: "calculator" })],
     });
   }
 

@@ -60,17 +60,38 @@ Owczarzy (2008) salt correction, and match Biopython's `Tm_NN` to within 0.001 �
   circular sequences). Residues no feature annotates are drawn in grey, so inferred sequence is
   never mistaken for annotated coding sequence. Features that already end in a stop codon are
   not extended, and separate frames or strands stay on separate rows.
+- **One primer hybridisation view, everywhere a primer is entered**
+  ([`src/features/primerHybridization.js`](src/features/primerHybridization.js),
+  [`primerView.js`](src/features/primerView.js)) — the primer's own bases are the control:
+  type onto the 3′ end or trim the 5′ end and the binding sites, the per-base pairing and
+  the Tm all follow. Three states are kept apart on purpose — paired, mispaired (red, with
+  the template base it sits over), and 5′ tail (amber) — because a restriction site or a
+  Gibson overlap is not a mismatch. An alignment of the primer against the template shows
+  which stretch anneals and which hangs off, with the template drawn under the tail as well,
+  reading 3′→5′ left to right (a bottom-strand primer reads right-to-left on the map, and
+  the view says so). Every site is listed, best first, with its annealing length, mismatch
+  count and Tm; clicking one shows it, and **Go to** selects it in the editor. **Reverse
+  complement** flips the entered sequence. The same view appears in the **Primer / Oligo
+  Analyzer**, in **Simulate PCR**'s two primer slots (where it picks the site the product
+  comes off and feeds it to the tool), and in the **Add/Edit Primer** dialog — where editing
+  bases only edits bases: the annotation moves when, and only when, *Set the binding site
+  from this* is pressed.
+- **Hybridisation parameters you can see and change** — which sites are reported is set by
+  *N bases at the 3′ end must pair* (the end a polymerase extends from), *allow a single
+  isolated mismatch* (one mismatch, 5′ of that, with pairing bases either side — adjacent
+  mismatches destabilise a duplex far more than separated ones), a *minimum Tm of the paired
+  stretch*, and optionally *also show sites that pair at the 5′ end only* (no product comes
+  off those). Per sequence, from a default set that newly opened files start with. This
+  replaced a whole-oligo alignment with a flat two-mismatch budget, which rejected every
+  primer carrying a 5′ tail — exactly the primers this fork exists for.
 - **Simulate PCR takes a pasted primer**
-  ([`src/features/primerBinding.js`](src/features/primerBinding.js),
-  [`pastedPrimers.js`](src/features/pastedPrimers.js)) — upstream only let you pick primers
+  ([`pastedPrimers.js`](src/features/pastedPrimers.js)) — upstream only let you pick primers
   that were already annotations, so checking "what does this amplify?" meant creating two
   annotations first and leaving them behind. Paste the bases instead: the primer is placed
-  on the template (both strands, allowing a 5′ tail that does not anneal — restriction
-  sites, overhangs), and the tool reports where it bound, the annealing length and tail,
-  the Tm of the annealing portion and the pair's annealing temperatures. It warns when a
-  primer binds in more than one place, says plainly when it does not bind at all, and says
-  so when a primer was pasted into the wrong box. The tail ends up in the product, and
-  saving the primer as an annotation afterwards is a button, not automatic.
+  on the template (both strands, 5′ tail and all), the product is assembled with the tail in
+  it, and the pair's annealing temperatures are reported. It says plainly when a primer does
+  not bind, and when one was pasted into the wrong box. Saving the primer as an annotation
+  afterwards is a button, not automatic.
 - **Mismatch-tolerant find** ([`src/features/mismatchSearch.js`](src/features/mismatchSearch.js))
   — the find bar gains an **Exact / ≤ 1 … ≤ 5 mismatches** control (in the wrench popover,
   or in the expanded bar). Hits come back best-first, so an exact match is never buried
@@ -130,6 +151,8 @@ keyboard ones are handled by this app's own Edit menu:
 | find tool matched exactly only | no way to find a primer designed against a slightly different template, or a motif that varies by a base |
 | Import Sequence went straight to a file picker | no way to get a sequence in from the clipboard |
 | ⌘F dead once the caret is in the find box | the input swallowed the key and the editor's own hotkey never fires inside a text field, so a second ⌘F did nothing; it now selects the query so the next thing typed or pasted replaces it |
+| Primer/Oligo Analyzer aligned the whole oligo with a 2-mismatch budget | every primer with a 5′ tail — Gibson overlaps, restriction sites, tagged primers — reported zero binding sites; now the 3′ end anchors the site and the tail is reported as a tail |
+| no per-base view of how a primer pairs | the Add/Edit Primer dialog showed bases and coordinates but never whether they pair where they claim to |
 
 ## Installing the app
 

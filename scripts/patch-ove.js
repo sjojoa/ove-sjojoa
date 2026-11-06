@@ -47,6 +47,15 @@ const patches = [
     to: "  pairwise_alignmentAnnotationLabelVisibility: {\n    features: true,",
   },
   {
+    // Same dialog, same scope: `this.props` carries the primer's bases, its
+    // coordinates and redux-form's `change`, which is everything the
+    // hybridisation view needs. OVE's own getAdditionalEditAnnotationComps
+    // prop is left alone for other uses.
+    name: "hybridisation view in the add/edit primer dialog",
+    from: "getAdditionalEditAnnotationComps && getAdditionalEditAnnotationComps(this.props),",
+    to: "getAdditionalEditAnnotationComps && getAdditionalEditAnnotationComps(this.props), (window.ovePrimerDialog ? window.ovePrimerDialog.render(react_default.a, this.props) : null),",
+  },
+  {
     // the shared Add/Edit annotation dialog has `change` (redux-form) and
     // `initialValues` in scope here, which is all the colour field needs
     name: "colour picker in the add/edit annotation dialog",
