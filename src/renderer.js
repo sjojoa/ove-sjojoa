@@ -7,9 +7,18 @@ const ORIGINAL_TITLE = document.title;
 // added, File > Import Sequence is pointed at our own paste dialog, and
 // tagged text joins the Export Sequence submenu.
 const MENU_FILTER = (menu) =>
-  window.oveTaggedExport.menuFilter(
-    window.oveImport.menuFilter(window.oveCloning.menuFilter(menu))
+  window.oveMenuLabels.menuFilter(
+    window.oveTaggedExport.menuFilter(
+      window.oveImport.menuFilter(window.oveCloning.menuFilter(menu))
+    )
   );
+
+// Same idea for the right-click menus, which OVE passes through their own hook.
+const RIGHT_CLICK_OVERRIDES = Object.assign(
+  {},
+  window.oveTaggedExport.rightClickOverrides,
+  window.oveMenuLabels.rightClickOverrides
+);
 
 function setWindowTitle(name) {
   document.title = ORIGINAL_TITLE + " -- " + (name || "Untitled Sequence");
@@ -90,7 +99,7 @@ window.oveMakeEditor = function oveMakeEditor(container, doc, restoring) {
   handleAlignment: window.oveLocalAligner.handleAlignment,
   // adds the "Cloning" menu (src/cloning/cloningTools.js)
   menuFilter: MENU_FILTER,
-  rightClickOverrides: window.oveTaggedExport.rightClickOverrides,
+  rightClickOverrides: RIGHT_CLICK_OVERRIDES,
   isFullscreen: true,
   // or you can pass "createDomNodeForMe" but make sure to use editor.close() to clean up the dom node!
 

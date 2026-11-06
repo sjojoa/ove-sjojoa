@@ -96,18 +96,29 @@
   }
 
   // OVE hands the right-click menu through this hook before showing it.
+  // sits with the other copy commands where there are any, otherwise at the end
+  function withCopyItem(items, annotation) {
+    const entry = {
+      text: "Copy as Tagged Text",
+      onClick: () => copyAsTagged(annotation),
+    };
+    const next = [...items];
+    const i = next.findIndex(
+      (item) => item && typeof item.text === "string" && /^Copy\b/.test(item.text)
+    );
+    next.splice(i === -1 ? next.length : i + 1, 0, entry);
+    return next;
+  }
+
+  const copyFrom = (items, opts) => withCopyItem(items, opts && opts.annotation);
+
   const rightClickOverrides = {
-    selectionLayerRightClicked: (items, opts) => {
-      const entry = {
-        text: "Copy as Tagged Text",
-        onClick: () => copyAsTagged(opts && opts.annotation),
-      };
-      // sits with the other copy commands, not at the bottom of the menu
-      const next = [...items];
-      const i = next.findIndex((item) => item && item.text === "Copy");
-      next.splice(i === -1 ? next.length : i + 1, 0, entry);
-      return next;
-    },
+    selectionLayerRightClicked: copyFrom,
+    // right-clicking the annotation itself copies just it, without having to
+    // select its bases first
+    featureRightClicked: copyFrom,
+    partRightClicked: copyFrom,
+    primerRightClicked: copyFrom,
   };
 
   // stable reference: OVE memoizes on the identity of menuFilter
