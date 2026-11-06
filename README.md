@@ -60,6 +60,15 @@ Owczarzy (2008) salt correction, and match Biopython's `Tm_NN` to within 0.001 �
   circular sequences). Residues no feature annotates are drawn in grey, so inferred sequence is
   never mistaken for annotated coding sequence. Features that already end in a stop codon are
   not extended, and separate frames or strands stay on separate rows.
+- **File → Import Sequence takes a paste, not only a file**
+  ([`src/features/importSequence.js`](src/features/importSequence.js)). A sequence usually
+  arrives in an email or an order confirmation, so the dialog leads with a paste box that
+  accepts plain bases (line numbers and whitespace ignored), FASTA, GenBank and tagged text,
+  with **Choose File…** still there. It says what it understood — `Genbank · 1,200 bp ·
+  circular · 3 annotations` — before you accept it, so a half-copied sequence is caught at
+  the point of paste. Prose is refused rather than imported as the letters it happens to
+  contain. The import opens in a new tab, and a name field and circular/linear toggle cover
+  what a bare paste cannot carry.
 - **Inline-tagged ("rogala") text, in and out**
   ([`src/features/taggedText.js`](src/features/taggedText.js)). Opening a `.txt` whose bases
   carry `[Name]…[/Name]` tags builds a real annotated sequence — types, strands, colours,
@@ -90,6 +99,7 @@ keyboard ones are handled by this app's own Edit menu:
 | CDS translations truncated at the feature boundary | a mis-annotated CDS hid the real reading frame; now it reads through to the stop codon |
 | no `selectAll` role in the Edit menu | macOS never delivered ⌘A to any text field, so the find box could not be cleared |
 | Version History drawn under the tab strip | its Back button was unclickable, so opening version history stranded you with no menu bar and no way back |
+| Import Sequence went straight to a file picker | no way to get a sequence in from the clipboard |
 | ⌘F dead once the caret is in the find box | the input swallowed the key and the editor's own hotkey never fires inside a text field, so a second ⌘F did nothing; it now selects the query so the next thing typed or pasted replaces it |
 
 ## Installing the app

@@ -2,6 +2,12 @@
 // editor for one tab; the tab manager decides when to create and show them.
 const ORIGINAL_TITLE = document.title;
 
+// One stable function, built once: OVE memoizes on the identity of menuFilter
+// and warns if it is handed a new one on every render. The Cloning menu is
+// added, then File > Import Sequence is pointed at our own paste dialog.
+const MENU_FILTER = (menu) =>
+  window.oveImport.menuFilter(window.oveCloning.menuFilter(menu));
+
 function setWindowTitle(name) {
   document.title = ORIGINAL_TITLE + " -- " + (name || "Untitled Sequence");
 }
@@ -80,7 +86,7 @@ window.oveMakeEditor = function oveMakeEditor(container, doc, restoring) {
   // runs alignments locally (src/alignment/localAligner.js) instead of the old TeselaGen server
   handleAlignment: window.oveLocalAligner.handleAlignment,
   // adds the "Cloning" menu (src/cloning/cloningTools.js)
-  menuFilter: window.oveCloning.menuFilter,
+  menuFilter: MENU_FILTER,
   isFullscreen: true,
   // or you can pass "createDomNodeForMe" but make sure to use editor.close() to clean up the dom node!
 

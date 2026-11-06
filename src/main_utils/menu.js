@@ -5,6 +5,7 @@ const { dialog } = require("electron");
 const isMac = process.platform === "darwin";
 
 const recentFiles = require("./recentFiles");
+const sequenceFileFilters = require("./sequenceFileFilters");
 const path = require("path");
 
 module.exports = function createMenu({ createWindow, getSeqJsonFromPath, openPath }) {
@@ -69,21 +70,7 @@ module.exports = function createMenu({ createWindow, getSeqJsonFromPath, openPat
               filters: [
                 {
                   name: "Sequence Files",
-                  extensions: [
-                    "gb",
-                    "json",
-                    "dna",
-                    "gbk",
-                    "gp",
-                    "fas",
-                    "fasta",
-                    "fa",
-                    "fna",
-                    "ffn",
-                    "gff",
-                    "gff3",
-                    "txt", // the lab's inline-tagged format
-                  ],
+                  extensions: sequenceFileFilters.EXTENSIONS,
                 },
               ],
               properties: ["openFile", "multiSelections"],

@@ -14,6 +14,8 @@ let isMacOpenTriggered = false;
 const windows = [];
 const recentFiles = require("./src/main_utils/recentFiles");
 const taggedText = require("./src/features/taggedText");
+const pastedBases = require("./src/features/pastedBases");
+const sequenceFileFilters = require("./src/main_utils/sequenceFileFilters");
 
 // Colours for the tagged-text exporter: a feature's colour is only worth
 // writing out when it is not simply the colour its type already gets.
@@ -411,12 +413,7 @@ ipcMain.handle("ove_pickSequenceFiles", async (event, { multi } = {}) => {
     {
       title: "Choose sequence file" + (multi ? "s" : ""),
       properties: ["openFile", ...(multi ? ["multiSelections"] : [])],
-      filters: [
-        {
-          name: "Sequences",
-          extensions: ["gb", "gbk", "genbank", "dna", "fasta", "fa", "fas", "fna", "ffn", "gff", "gff3", "json", "txt"],
-        },
-      ],
+      filters: sequenceFileFilters.filters,
     }
   );
   if (canceled) return [];
@@ -426,6 +423,83 @@ ipcMain.handle("ove_pickSequenceFiles", async (event, { multi } = {}) => {
     if (seq && seq.sequence) sequences.push(seq);
   }
   return sequences;
+});
+
+// Import dialog: parse text the user pasted, the same way a file would be
+// parsed. Lives here because bio-parsers is a main-process dependency, and
+// because then paste and open cannot disagree about a format.
+ipcMain.handle("ove_parseSequenceText", async (event, { text, name } = {}) => {
+  const raw = String(text || "");
+  if (!raw.trim()) return { sequences: [], warnings: [], format: null };
+  const fileName = name || "pasted";
+
+  if (taggedText.looksTagged(raw)) {
+    const { sequenceData, warnings } = taggedText.taggedToSequenceData(raw);
+    if (!sequenceData.name || sequenceData.name === "Untitled Sequence") {
+      sequenceData.name = fileName;
+    }
+    return { sequences: [sequenceData], warnings, format: "tagged text" };
+  }
+
+  // Bare bases, which is most pastes. See src/features/pastedBases.js for why
+  // this does not just go to bio-parsers like everything else.
+  if (!pastedBases.isStructured(raw)) {
+    const read = pastedBases.rawBases(raw);
+    if (!read.ok) return { sequences: [], warnings: [read.reason], format: null };
+    return {
+      sequences: [
+        {
+          name: fileName,
+          circular: false,
+          sequence: read.sequence,
+          features: [],
+          primers: [],
+          parts: [],
+        },
+      ],
+      warnings: read.dropped
+        ? [`dropped ${read.dropped} character(s) that are not bases`]
+        : [],
+      format: "raw bases",
+    };
+  }
+
+  try {
+    const results = await bioParsers.anyToJson(raw, { fileName });
+    const warnings = [];
+    const sequences = [];
+    let format = null;
+    results.forEach((res) => {
+      (res.messages || []).forEach((m) => {
+        const parser = /Parsed using (.+?) Parser/i.exec(m);
+        if (parser) format = parser[1];
+        else warnings.push(m);
+      });
+      if (res.parsedSequence && res.parsedSequence.sequence) {
+        sequences.push(res.parsedSequence);
+      } else if (res.success === false) {
+        warnings.push("could not parse that text as a sequence");
+      }
+    });
+    return { sequences, warnings: Array.from(new Set(warnings)), format };
+  } catch (error) {
+    return { sequences: [], warnings: [error.message], format: null };
+  }
+});
+
+// Import dialog: "Choose File..." takes the same path as File > Open, so an
+// imported file arrives with its path (and lands in Open Recent) like any other.
+ipcMain.handle("ove_openFilePicker", async (event) => {
+  const { canceled, filePaths } = await dialog.showOpenDialog(
+    BrowserWindow.fromWebContents(event.sender),
+    {
+      filters: sequenceFileFilters.filters,
+      properties: ["openFile", "multiSelections"],
+    }
+  );
+  if (canceled) return 0;
+  filePaths.forEach((p) => openPath(p));
+  return filePaths.length;
 });
 
 ipcMain.handle("ove_showSaveDialog", async (event, opts) => {
