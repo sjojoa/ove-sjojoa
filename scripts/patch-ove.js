@@ -121,6 +121,25 @@ const patches = [
     to: "}, matchesTotal > 0 ? matchNumber + 1 : 0, \"/\", matchesTotal), window.oveMismatchFind && window.oveMismatchFind.activeDetail(react_default.a), /*#__PURE__*/react_default.a.createElement(buttons_Button, {\n      \"data-test\": \"veFindPreviousMatchButton\",",
   },
   {
+    // Simulate PCR could only use primers that were already annotations.
+    // src/features/pastedPrimers.js adds a paste box and hands the tool a
+    // primer placed on the template; `bases` carries any 5' tail, which the
+    // tool's own product assembly already knows how to splice in.
+    name: "simulate PCR accepts pasted primers",
+    from: "  var fPrimer = sequenceData.primers[forwardPrimer];",
+    to: "  var ovePasted = window.ovePastedPrimers && window.ovePastedPrimers.virtual();\n  if (ovePasted && Object.keys(ovePasted).length) {\n    sequenceData = PCRTool_extends({}, sequenceData, {\n      primers: PCRTool_extends({}, sequenceData.primers, ovePasted)\n    });\n  }\n  var fPrimer = sequenceData.primers[forwardPrimer];",
+  },
+  {
+    name: "simulate PCR shows the paste box",
+    from: "  }, /*#__PURE__*/react_default.a.createElement(ReactSelectField, {\n    noResultsText: \"Create a new primer in the forward direction to use it in this tool\",",
+    to: "  }, window.ovePastedPrimers ? window.ovePastedPrimers.render(react_default.a, props) : null, /*#__PURE__*/react_default.a.createElement(ReactSelectField, {\n    noResultsText: \"No forward primer annotations on this sequence \\u2014 paste bases above instead\",",
+  },
+  {
+    name: "simulate PCR reverse primer empty state mentions pasting",
+    from: "    noResultsText: \"Create a new primer in the reverse direction to use it in this tool\",",
+    to: "    noResultsText: \"No reverse primer annotations on this sequence \\u2014 paste bases above instead\",",
+  },
+  {
     name: "alignment tool note reflects the built-in local aligner",
     from: "Note: This tool requires an alignment server to be hooked up for it to work properly. It will NOT work in the OVE demo page.",
     to: "Alignments run locally on this computer (no server needed). Tip: add .ab1 files, tick \\\"Align Sequencing Reads to Reference Sequence\\\" and optionally \\\"Auto-Trim\\\".",

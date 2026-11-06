@@ -60,6 +60,17 @@ Owczarzy (2008) salt correction, and match Biopython's `Tm_NN` to within 0.001 �
   circular sequences). Residues no feature annotates are drawn in grey, so inferred sequence is
   never mistaken for annotated coding sequence. Features that already end in a stop codon are
   not extended, and separate frames or strands stay on separate rows.
+- **Simulate PCR takes a pasted primer**
+  ([`src/features/primerBinding.js`](src/features/primerBinding.js),
+  [`pastedPrimers.js`](src/features/pastedPrimers.js)) — upstream only let you pick primers
+  that were already annotations, so checking "what does this amplify?" meant creating two
+  annotations first and leaving them behind. Paste the bases instead: the primer is placed
+  on the template (both strands, allowing a 5′ tail that does not anneal — restriction
+  sites, overhangs), and the tool reports where it bound, the annealing length and tail,
+  the Tm of the annealing portion and the pair's annealing temperatures. It warns when a
+  primer binds in more than one place, says plainly when it does not bind at all, and says
+  so when a primer was pasted into the wrong box. The tail ends up in the product, and
+  saving the primer as an annotation afterwards is a button, not automatic.
 - **Mismatch-tolerant find** ([`src/features/mismatchSearch.js`](src/features/mismatchSearch.js))
   — the find bar gains an **Exact / ≤ 1 … ≤ 5 mismatches** control (in the wrench popover,
   or in the expanded bar). Hits come back best-first, so an exact match is never buried
@@ -115,6 +126,7 @@ keyboard ones are handled by this app's own Edit menu:
 | CDS translations truncated at the feature boundary | a mis-annotated CDS hid the real reading frame; now it reads through to the stop codon |
 | no `selectAll` role in the Edit menu | macOS never delivered ⌘A to any text field, so the find box could not be cleared |
 | Version History drawn under the tab strip | its Back button was unclickable, so opening version history stranded you with no menu bar and no way back |
+| Simulate PCR only accepted existing primer annotations | no way to check what a primer pair in an email amplifies without annotating it first |
 | find tool matched exactly only | no way to find a primer designed against a slightly different template, or a motif that varies by a base |
 | Import Sequence went straight to a file picker | no way to get a sequence in from the clipboard |
 | ⌘F dead once the caret is in the find box | the input swallowed the key and the editor's own hotkey never fires inside a text field, so a second ⌘F did nothing; it now selects the query so the next thing typed or pasted replaces it |

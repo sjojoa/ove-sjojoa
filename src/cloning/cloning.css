@@ -173,3 +173,46 @@ details.ove-cl-details summary {
 .alignmentView-top-container .tg-zoom-bar {
   display: none !important;
 }
+
+/* Simulate PCR: paste-a-primer block (src/features/pastedPrimers.js) */
+.ove-pasted-primers {
+  margin-bottom: 8px;
+}
+.ove-pasted-details > summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  padding: 2px 0;
+}
+/* One column: the PCR panel is narrow and tall, and side-by-side slots push
+   their own controls off the right edge of it. */
+.ove-pasted-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 6px 0 2px;
+}
+.ove-pasted-slot {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ove-pasted-slot .ove-cl-row {
+  flex-wrap: wrap;
+}
+.ove-pasted-slot textarea {
+  min-height: 42px;
+}
+.ove-pasted-slot-head {
+  font-size: 12px;
+  font-weight: 600;
+  color: #5c7080;
+}
+.bp3-dark .ove-pasted-slot-head {
+  color: #a7b6c2;
+}
+.ove-pasted-report .ove-cl-callout {
+  margin: 4px 0 0;
+  font-size: 12px;
+}
