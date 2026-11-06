@@ -78,6 +78,49 @@ const patches = [
     to: "      } else {\n        color = aminoAcid.color;\n      }\n      var oveRt = window.oveReadThroughColor && window.oveReadThroughColor(annotation, aminoAcidSliver.sequenceIndex);\n      if (oveRt) color = oveRt;\n      return /*#__PURE__*/react_default.a.createElement(Translations_AASliver, {",
   },
   {
+    // Mismatch-tolerant search (src/features/mismatchSearch.js). When
+    // "mismatches allowed" is 0 the editor's own exact search runs unchanged.
+    name: "find tool can tolerate mismatches",
+    from: "function searchLayersSelector(sequence, isCircular, isOpen, searchString, ambiguousOrLiteral, dnaOrAA, isProtein, proteinSequence) {\n  if (!searchString || !isOpen) {\n    return [];\n  }",
+    to: "function searchLayersSelector(sequence, isCircular, isOpen, searchString, ambiguousOrLiteral, dnaOrAA, isProtein, proteinSequence, oveMismatches) {\n  if (!searchString || !isOpen) {\n    return [];\n  }\n  if (oveMismatches > 0 && !isProtein && dnaOrAA === \"DNA\" && window.oveMismatchFind) {\n    return window.oveMismatchFind.searchLayers(sequence, searchString, {\n      isCircular: isCircular,\n      mismatches: oveMismatches,\n      ambiguous: ambiguousOrLiteral === \"AMBIGUOUS\",\n      searchReverseStrand: true\n    });\n  }",
+  },
+  {
+    // ...and the allowance has to be an input to the memoised selector, or
+    // changing it would not recompute the hits.
+    name: "mismatch allowance feeds the search selector",
+    from: "}, function (state) {\n  return state.sequenceData.proteinSequence;\n}, searchLayersSelector));",
+    to: "}, function (state) {\n  return state.sequenceData.proteinSequence;\n}, function (state) {\n  return state.findTool && state.findTool.oveMismatches;\n}, searchLayersSelector));",
+  },
+  {
+    // The marks drawn over mismatched bases are search layers too, so that
+    // they paint in the sequence map, but they are not matches: without this
+    // the find bar would count them and "next match" would stop on them.
+    name: "mismatch marks are not counted as matches",
+    from: "  var matchesTotal = searchLayers.length;",
+    to: "  var matchesTotal = searchLayers.filter(function (l) {\n    return !l.oveMismatchMark;\n  }).length;",
+  },
+  {
+    // With "Highlight All" off the editor keeps only the active match, which
+    // would drop that match's own mismatch marks. Keep the marks that fall
+    // inside it — they are the point of the search.
+    name: "the active match keeps its mismatch marks",
+    from: "  if (!findTool.highlightAll && searchLayers[findTool.matchNumber] || searchLayers.length > MAX_MATCHES_DISPLAYED) {\n    searchLayers = [searchLayers[findTool.matchNumber]];\n  }",
+    to: "  if (!findTool.highlightAll && searchLayers[findTool.matchNumber] || searchLayers.length > MAX_MATCHES_DISPLAYED) {\n    var oveActive = searchLayers[findTool.matchNumber];\n    var oveInside = function (l) {\n      if (!oveActive || !l || !l.oveMismatchMark) return false;\n      return oveActive.start <= oveActive.end ? l.start >= oveActive.start && l.start <= oveActive.end : l.start >= oveActive.start || l.start <= oveActive.end;\n    };\n    searchLayers = [oveActive].concat(searchLayers.filter(oveInside));\n  }",
+  },
+  {
+    name: "find bar offers a mismatch allowance",
+    from: "var findOptionsEls = [/*#__PURE__*/react_default.a.createElement(htmlSelect_HTMLSelect, {\n      key: \"dnaoraa\",",
+    to: "var findOptionsEls = [window.oveMismatchFind && window.oveMismatchFind.control(react_default.a), /*#__PURE__*/react_default.a.createElement(htmlSelect_HTMLSelect, {\n      key: \"dnaoraa\",",
+  },
+  {
+    // ...and the active hit's mismatches are spelled out next to the match
+    // counter ("3/96  2 mismatches: 412 A>G, 418 T>C"), in both the inline and
+    // the expanded find bar.
+    name: "find bar names the active match's mismatches",
+    from: "}, matchesTotal > 0 ? matchNumber + 1 : 0, \"/\", matchesTotal), /*#__PURE__*/react_default.a.createElement(buttons_Button, {\n      \"data-test\": \"veFindPreviousMatchButton\",",
+    to: "}, matchesTotal > 0 ? matchNumber + 1 : 0, \"/\", matchesTotal), window.oveMismatchFind && window.oveMismatchFind.activeDetail(react_default.a), /*#__PURE__*/react_default.a.createElement(buttons_Button, {\n      \"data-test\": \"veFindPreviousMatchButton\",",
+  },
+  {
     name: "alignment tool note reflects the built-in local aligner",
     from: "Note: This tool requires an alignment server to be hooked up for it to work properly. It will NOT work in the OVE demo page.",
     to: "Alignments run locally on this computer (no server needed). Tip: add .ab1 files, tick \\\"Align Sequencing Reads to Reference Sequence\\\" and optionally \\\"Auto-Trim\\\".",

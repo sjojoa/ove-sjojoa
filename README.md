@@ -60,6 +60,15 @@ Owczarzy (2008) salt correction, and match Biopython's `Tm_NN` to within 0.001 �
   circular sequences). Residues no feature annotates are drawn in grey, so inferred sequence is
   never mistaken for annotated coding sequence. Features that already end in a stop codon are
   not extended, and separate frames or strands stay on separate rows.
+- **Mismatch-tolerant find** ([`src/features/mismatchSearch.js`](src/features/mismatchSearch.js))
+  — the find bar gains an **Exact / ≤ 1 … ≤ 5 mismatches** control (in the wrench popover,
+  or in the expanded bar). Hits come back best-first, so an exact match is never buried
+  under approximate ones, and the bases that actually differ are marked on top of the hit
+  rather than the whole hit being highlighted uniformly. The active match is spelled out
+  next to the counter — `2 mismatches: 310 T>A, 315 C>G` — and the same text is the hit's
+  hover title. Both strands, ambiguity codes honoured in Ambiguous mode, origin-wrapping
+  hits on circular sequences. A 50 kb sequence against a 20-mer at ≤ 2 mismatches takes
+  about 9 ms.
 - **File → Import Sequence takes a paste, not only a file**
   ([`src/features/importSequence.js`](src/features/importSequence.js)). A sequence usually
   arrives in an email or an order confirmation, so the dialog leads with a paste box that
@@ -106,6 +115,7 @@ keyboard ones are handled by this app's own Edit menu:
 | CDS translations truncated at the feature boundary | a mis-annotated CDS hid the real reading frame; now it reads through to the stop codon |
 | no `selectAll` role in the Edit menu | macOS never delivered ⌘A to any text field, so the find box could not be cleared |
 | Version History drawn under the tab strip | its Back button was unclickable, so opening version history stranded you with no menu bar and no way back |
+| find tool matched exactly only | no way to find a primer designed against a slightly different template, or a motif that varies by a base |
 | Import Sequence went straight to a file picker | no way to get a sequence in from the clipboard |
 | ⌘F dead once the caret is in the find box | the input swallowed the key and the editor's own hotkey never fires inside a text field, so a second ⌘F did nothing; it now selects the query so the next thing typed or pasted replaces it |
 

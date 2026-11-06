@@ -21,3 +21,34 @@
 .bp3-toast-container {
   z-index: 100000000;
 }
+/* Mismatch-tolerant find (src/features/mismatchFind.js). An approximate hit is
+   drawn like an exact one so it reads as a match, and the bases that actually
+   differ are marked on top of it — highlighting the whole hit uniformly hides
+   the very thing being searched for. */
+.veSearchLayer.oveSearchFuzzy {
+  opacity: 0.75;
+}
+.veSearchLayer.oveSearchMismatch {
+  background: #d9822b !important;
+  box-shadow: inset 0 -2px 0 #a66321;
+  opacity: 1;
+}
+.ove-mismatch-find {
+  display: flex;
+  align-items: center;
+  max-width: 190px;
+}
+.ove-mismatch-detail {
+  font-size: 11px;
+  color: #a66321;
+  margin: 0 6px;
+  white-space: nowrap;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: inline-block;
+  vertical-align: middle;
+}
+.bp3-dark .ove-mismatch-detail {
+  color: #a7b6c2;
+}
