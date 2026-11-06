@@ -4,9 +4,12 @@ const ORIGINAL_TITLE = document.title;
 
 // One stable function, built once: OVE memoizes on the identity of menuFilter
 // and warns if it is handed a new one on every render. The Cloning menu is
-// added, then File > Import Sequence is pointed at our own paste dialog.
+// added, File > Import Sequence is pointed at our own paste dialog, and
+// tagged text joins the Export Sequence submenu.
 const MENU_FILTER = (menu) =>
-  window.oveImport.menuFilter(window.oveCloning.menuFilter(menu));
+  window.oveTaggedExport.menuFilter(
+    window.oveImport.menuFilter(window.oveCloning.menuFilter(menu))
+  );
 
 function setWindowTitle(name) {
   document.title = ORIGINAL_TITLE + " -- " + (name || "Untitled Sequence");

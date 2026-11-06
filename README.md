@@ -74,7 +74,8 @@ Owczarzy (2008) salt correction, and match Biopython's `Tm_NN` to within 0.001 �
   carry `[Name]…[/Name]` tags builds a real annotated sequence — types, strands, colours,
   spliced `#1`/`#2` segments, and the lab's convention that a backslash on the *opening* tag
   (`[\AmpR]…[AmpR]`) means the reverse strand. Saving to `.txt` writes the sequence back out
-  the same way, emitting only what differs from the defaults so the text stays readable in an
+  the same way — as **File → Export Sequence → Download Tagged Text File**, or by saving to
+  `.txt` — emitting only what differs from the defaults so the text stays readable in an
   email. Parsing is deliberately forgiving — hand-maintained files drift — and anything it had
   to guess or drop is shown as a warning instead of being swallowed.
 - **⌘A behaves like ⌘A** — selects the text in the find box when a field has focus, and the
