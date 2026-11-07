@@ -328,6 +328,8 @@
       if (!clean) return;
       if (!result.sites.length) {
         message.appendChild(U.callout(result.reason || "No binding site.", "warning"));
+        const note = typeof opts.noSiteNote === "function" ? opts.noSiteNote() : null;
+        if (note) message.appendChild(U.callout(note, "warning"));
         // The commonest reason a real primer finds nothing is that its 3' end
         // does not pair — a primer designed against a different template, or
         // a mutagenic one. That site is worth naming even though no product
@@ -366,30 +368,6 @@
       }
       if (activeIndex >= result.sites.length) activeIndex = 0;
       const site = result.sites[activeIndex];
-
-      // Where the host says this primer is annotated, if it is annotated at
-      // all. Bases and coordinates are independent fields: adding bases does
-      // not move the annotation, and then the two disagree silently.
-      const want = typeof opts.expectedRange === "function" ? opts.expectedRange() : null;
-      if (
-        want &&
-        Number.isFinite(want.start) &&
-        (want.start !== site.start ||
-          want.end !== site.end ||
-          (want.forward !== undefined && want.forward !== !site.bottomStrand))
-      ) {
-        message.appendChild(
-          U.callout(
-            `These bases bind ${oneBased(site.start)}–${oneBased(site.end)}` +
-              (want.forward !== undefined && want.forward !== !site.bottomStrand
-                ? ` on the ${site.bottomStrand ? "bottom" : "top"} strand`
-                : "") +
-              `, but the annotation says ${oneBased(want.start)}–${oneBased(want.end)}. ` +
-              "Adding or trimming bases does not move the annotation.",
-            "warning"
-          )
-        );
-      }
 
       alignHost.appendChild(alignmentBlock(site, clean, template(), isCircular()));
 
@@ -457,6 +435,7 @@
               activeIndex = i;
               renderStats();
               renderSites();
+              notifySite();
             },
           }
         )
@@ -468,6 +447,13 @@
       }
     }
 
+    // Hosts that mirror the chosen site somewhere else — the Add/Edit Primer
+    // dialog writes it onto the annotation — need telling when it changes,
+    // whether that was a new search or a different row being clicked.
+    function notifySite() {
+      if (opts.onSite) opts.onSite(result.sites[activeIndex] || null, result);
+    }
+
     function compute() {
       const clean = String(input.value || "").replace(/[^A-Za-z]/g, "");
       bases = input.value;
@@ -477,6 +463,7 @@
       renderStats();
       renderSites();
       if (opts.onChange) opts.onChange(result, clean);
+      notifySite();
     }
 
     input.addEventListener("input", () => {

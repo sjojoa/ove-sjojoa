@@ -73,13 +73,13 @@ Owczarzy (2008) salt correction, and match Biopython's `Tm_NN` to within 0.001 �
   count and Tm; clicking one shows it, and **Go to** selects it in the editor. **Reverse
   complement** flips the entered sequence. The same view appears in the **Primer / Oligo
   Analyzer**, in **Simulate PCR**'s two primer slots (where it picks the site the product
-  comes off and feeds it to the tool), and in the **Add/Edit Primer** dialog — where it reads
-  the dialog's own Bases field rather than adding a second box, and editing bases only
-  edits bases: the annotation moves when, and only when, *Set the binding site from this*
-  is pressed. If the bases stop binding where the annotation says they do — which is what
-  happens the moment you add a base, since the coordinates are a separate field — the
-  panel says both positions. When nothing binds, it says so first, and if the reason is an
-  unpaired 3′ end it names the stretch that does pair.
+  comes off and feeds it to the tool), and in the **Add/Edit Primer** dialog, where it is how
+  the primer is positioned at all: *Bind Start* and *Bind End* are gone, the bases are the
+  primer, and the annotation follows the site computed from them. Type a base, paste a
+  different oligo, hit *Reverse complement*, or pick another row in the site list, and the
+  primer moves to where those bases actually bind — strand included. When they bind
+  nowhere the annotation is left where it was and the panel says so, naming the stretch
+  that does pair if the reason is an unpaired 3′ end.
 - **Hybridisation parameters you can see and change** — which sites are reported is set by
   *N bases at the 3′ end must pair* (the end a polymerase extends from), *allow a single
   isolated mismatch* (one mismatch, 5′ of that, with pairing bases either side — adjacent
@@ -169,6 +169,8 @@ keyboard ones are handled by this app's own Edit menu:
 | GC content and Tm of a selection both shipped switched off | two settings nobody finds, so the commonest question about a selection — is this a usable primer? — meant opening a tool |
 | status bar Tm disagreed with the Cloning menu's by ~5 °C | the same bases got two different melting temperatures depending on where you looked; the status bar now uses the fork's model (`calculateNebTm` also returned `NaN` as the component called it) |
 | main window opened at a fixed 1000x800 | smaller than the app's own Add/Edit Primer dialog, which then scrolled from the moment it opened; it now opens at the size of the display, and the annotation dialogs are 580px wide so an alignment fits in one |
+| primer bases and binding coordinates were independent fields | adding a base left the annotation behind, and the dialog then marked most of the oligo red against a stretch of template it was never meant to sit on; the coordinates are now computed from the bases |
+| the primer dialog printed its own melting temperature | ~6 °C from the one the hybridisation view and the Cloning menu report, on the same bases, a few pixels apart |
 | no per-base view of how a primer pairs | the Add/Edit Primer dialog showed bases and coordinates but never whether they pair where they claim to |
 
 ## Installing the app

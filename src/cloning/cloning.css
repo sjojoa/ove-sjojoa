@@ -333,3 +333,17 @@ details.ove-cl-details summary {
 .ove-tmcond p:last-child {
   margin-bottom: 0;
 }
+
+/* --- Add/Edit Primer: the bases decide where the primer is --------------- */
+/* Bind Start, Bind End and the length they imply are consequences of the
+   bases, computed in "Where this primer binds" and written onto the
+   annotation from there. Leaving them as editable fields invited the two to
+   drift apart — type a base, and the coordinates stayed behind. Scoped to
+   dialogs carrying the hybridisation view, so the feature and part dialogs
+   keep their own coordinate fields. */
+.bp3-dialog:has(.ove-ph-dialog-host) .bp3-dialog-body > .tg-test-start,
+.bp3-dialog:has(.ove-ph-dialog-host) .bp3-dialog-body > .tg-test-end,
+.bp3-dialog:has(.ove-ph-dialog-host) .bp3-dialog-body > .bp3-text-muted.bp3-text-small,
+.bp3-dialog:has(.ove-ph-dialog-host) .bp3-dialog-body > .ove-color-field + div {
+  display: none;
+}

@@ -172,6 +172,13 @@ const patches = [
     to: "    isDraggable: true,\n    width: 580\n  }",
   },
   {
+    // the primer dialog printed upstream's Tm right above the hybridisation
+    // view's own, ~6 C apart on the same bases
+    name: "one melting temperature in the add/edit primer dialog",
+    from: "  })), /*#__PURE__*/react_default.a.createElement(MeltingTemp, {\n    InnerWrapper: AddOrEditPrimerDialog_InnerWrapperMeltingTemp,\n    sequence: bases\n  })));",
+    to: "  })), null /* ove: upstream Tm removed; the hybridisation view reports it */));",
+  },
+  {
     name: "alignment tool note reflects the built-in local aligner",
     from: "Note: This tool requires an alignment server to be hooked up for it to work properly. It will NOT work in the OVE demo page.",
     to: "Alignments run locally on this computer (no server needed). Tip: add .ab1 files, tick \\\"Align Sequencing Reads to Reference Sequence\\\" and optionally \\\"Auto-Trim\\\".",

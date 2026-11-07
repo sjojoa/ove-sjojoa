@@ -1,29 +1,26 @@
 // The hybridisation view inside the Add/Edit Primer dialog.
 //
 // Hooked up through OVE's own `getAdditionalEditAnnotationComps` editor prop,
-// so no bundle patch is involved. The dialog already owns the primer's bases
-// (its "Bases" field) and its binding coordinates; what it never said is
-// whether those bases actually pair where the coordinates claim. Editing the
-// bases here only edits the bases: the annotation is moved when — and only
-// when — the "Set the binding site from this" button is pressed, because
-// recomputing where a primer would bind is not the same as deciding to move
-// the primer that is already on the map.
+// so no bundle patch is involved.
+//
+// A primer is its bases. Where it sits on the map is a consequence of them,
+// not a second thing to keep in step by hand, so the dialog's Bind Start /
+// Bind End fields are hidden (cloning.css) and the annotation follows the
+// site computed from the bases: edit them and the primer moves to wherever
+// those bases now bind. Upstream kept the two independent, which meant
+// adding a base left the annotation behind and the dialog then marked most
+// of the oligo as mismatched against a stretch of template it was never
+// meant to sit on.
+//
+// Where the bases bind nowhere, the annotation is left where it was and the
+// panel says so: no coordinates would be honest, and silently dropping the
+// primer off the map would be worse.
 (function () {
   let props = null;
   let host = null;
   let view = null;
   let syncTimer = null;
   let lastRange = "";
-
-  const OPEN_KEY = "ove.primerDialogPanelOpen";
-  function panelOpen() {
-    try {
-      const raw = window.localStorage.getItem(OPEN_KEY);
-      return raw === null ? true : JSON.parse(raw);
-    } catch (e) {
-      return true;
-    }
-  }
 
   const seqData = () => (props && props.sequenceData) || {};
   const template = () => seqData().sequence || "";
@@ -52,6 +49,21 @@
     return (forward === false ? window.ovePrimerHybridization.reverseComplement(stretch) : stretch).toUpperCase();
   }
 
+  // Write the chosen site onto the annotation. The form's start/end are
+  // 1-based (they were the fields the user used to read), the stored
+  // annotation is 0-based, and redux-form is only touched when something
+  // actually differs — otherwise every render would dispatch a change and
+  // the form would re-render itself in a loop.
+  function applySite(site) {
+    if (!site || !props || !props.change) return;
+    const start = site.start + 1;
+    const end = site.end + 1;
+    const forward = !site.bottomStrand;
+    if (Number(props.start) !== start) props.change("start", start);
+    if (Number(props.end) !== end) props.change("end", end);
+    if ((props.forward !== false) !== forward) props.change("forward", forward);
+  }
+
   function build(el) {
     const U = window.oveCloningUI;
     if (!U || !window.ovePrimerView) return;
@@ -68,15 +80,17 @@
       showInput: false,
       docKey: (doc && doc.id) || "default",
       placeholder: "Primer bases, 5′→3′ (a 5′ tail is fine)",
-      // what the annotation claims, so the view can say when the bases no
-      // longer bind there (the fields are 1-based in the form)
-      expectedRange: () => {
-        if (!props) return null;
-        const start = Number(props.start) - 1;
-        const end = Number(props.end) - 1;
+      // when nothing binds there are no coordinates to write, so say where
+      // the annotation has been left instead of moving it somewhere invented
+      noSiteNote: () => {
+        const start = Number(props && props.start);
+        const end = Number(props && props.end);
         if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
-        return { start, end, forward: props.forward !== false };
+        return `The annotation stays at ${start}–${end}. Nothing here moves it, because these bases do not bind this sequence.`;
       },
+      // the site is the annotation: pick a different one in the list and the
+      // primer moves to it
+      onSite: applySite,
       onChange: (result, bases) => {
         // keep the dialog's own Bases field in step, without touching the
         // coordinates
@@ -85,40 +99,18 @@
           props.change("bases", next);
         }
       },
-      buttons: [
-        {
-          text: "Set the binding site from this",
-          icon: "locate",
-          title: "Move this primer's start, end and strand onto the site shown",
-          onClick: (site) => {
-            if (!site) return U.toast("No binding site to move this primer to", "warning");
-            if (!props || !props.change) return;
-            // the dialog's start/end fields are 1-based, like the ones the
-            // user reads in them; the annotation is converted back on save
-            props.change("start", site.start + 1);
-            props.change("end", site.end + 1);
-            props.change("forward", !site.bottomStrand);
-            U.toast(`Binding site set to ${site.start + 1}–${site.end + 1}`);
-          },
-        },
-      ],
     });
-    // Open by default, but remembered: someone who does not want it on every
-    // primer can collapse it once and have the dialog stay short.
-    const details = U.h(
-      "details",
-      { className: "ove-pasted-details ove-ph-dialog", open: panelOpen() },
-      U.h("summary", {}, "Where this primer binds"),
-      view.el
+    // Always open: with the coordinate fields gone this is where the primer's
+    // position is shown, so it is not something to go looking for. It still
+    // collapses while the dialog is up, for anyone who wants the room.
+    el.appendChild(
+      U.h(
+        "details",
+        { className: "ove-pasted-details ove-ph-dialog", open: true },
+        U.h("summary", {}, "Where this primer binds"),
+        view.el
+      )
     );
-    details.addEventListener("toggle", () => {
-      try {
-        window.localStorage.setItem(OPEN_KEY, JSON.stringify(details.open));
-      } catch (e) {
-        // blocked storage: the panel just goes back to open next time
-      }
-    });
-    el.appendChild(details);
   }
 
   // A stable ref: React re-renders this dialog on every keystroke in any of
