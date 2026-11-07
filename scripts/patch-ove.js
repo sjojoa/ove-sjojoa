@@ -165,6 +165,13 @@ const patches = [
     to: "showMeltingTemp && (window.oveSelectionStats ? window.oveSelectionStats.statusItem(react_default.a, StatusBarItem, sequence) : /*#__PURE__*/react_default.a.createElement(MeltingTemp, {\n    WrapperToUse: StatusBarItem,\n    sequence: sequence\n  }))",
   },
   {
+    // 400px cannot hold an alignment of a primer against its template, and
+    // the add/edit dialogs then run the full height of the window
+    name: "wider add/edit annotation dialogs",
+    from: "    isDraggable: true,\n    width: 400\n  }",
+    to: "    isDraggable: true,\n    width: 580\n  }",
+  },
+  {
     name: "alignment tool note reflects the built-in local aligner",
     from: "Note: This tool requires an alignment server to be hooked up for it to work properly. It will NOT work in the OVE demo page.",
     to: "Alignments run locally on this computer (no server needed). Tip: add .ab1 files, tick \\\"Align Sequencing Reads to Reference Sequence\\\" and optionally \\\"Auto-Trim\\\".",

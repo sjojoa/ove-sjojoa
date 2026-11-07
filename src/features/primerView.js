@@ -307,7 +307,11 @@
               ? " (paired stretch)"
               : "")
         );
-        if (site.tailLength) chips.push(`${site.tailLength} nt 5′ tail`);
+        // on a 5'-anchored site the unpaired stretch hangs off the 3' end,
+        // which is the end that matters: say which end it is
+        if (site.tailLength) {
+          chips.push(`${site.tailLength} nt ${site.fivePrimeOnly ? "3′" : "5′"} tail`);
+        }
       } else if (D) {
         const t = D.tm(clean);
         if (Number.isFinite(t)) chips.push(`Tm ${t.toFixed(1)} °C (whole oligo)`);
@@ -324,19 +328,100 @@
       if (!clean) return;
       if (!result.sites.length) {
         message.appendChild(U.callout(result.reason || "No binding site.", "warning"));
+        // The commonest reason a real primer finds nothing is that its 3' end
+        // does not pair — a primer designed against a different template, or
+        // a mutagenic one. That site is worth naming even though no product
+        // comes off it, rather than leaving "no binding site" as the whole
+        // story behind a parameter nobody has turned on.
+        if (!params.show5PrimeOnly) {
+          const probe = H().findSites(template(), clean, {
+            isCircular: isCircular(),
+            params: Object.assign({}, params, { show5PrimeOnly: true }),
+          });
+          const best = probe.sites[0];
+          if (best) {
+            message.appendChild(
+              U.callout(
+                h(
+                  "div",
+                  {},
+                  h(
+                    "div",
+                    {},
+                    `${best.annealLength} bases do pair, at ${oneBased(best.start)}–${oneBased(best.end)} on the ` +
+                      `${best.bottomStrand ? "bottom" : "top"} strand, but the 3′ end does not — so nothing extends from here.`
+                  ),
+                  button(
+                    "Show 5′-end-only sites",
+                    () => writeParams(Object.assign({}, params, { show5PrimeOnly: true })),
+                    { minimal: true, icon: "eye-open" }
+                  )
+                ),
+                "primary"
+              )
+            );
+          }
+        }
         return;
       }
       if (activeIndex >= result.sites.length) activeIndex = 0;
       const site = result.sites[activeIndex];
+
+      // Where the host says this primer is annotated, if it is annotated at
+      // all. Bases and coordinates are independent fields: adding bases does
+      // not move the annotation, and then the two disagree silently.
+      const want = typeof opts.expectedRange === "function" ? opts.expectedRange() : null;
+      if (
+        want &&
+        Number.isFinite(want.start) &&
+        (want.start !== site.start ||
+          want.end !== site.end ||
+          (want.forward !== undefined && want.forward !== !site.bottomStrand))
+      ) {
+        message.appendChild(
+          U.callout(
+            `These bases bind ${oneBased(site.start)}–${oneBased(site.end)}` +
+              (want.forward !== undefined && want.forward !== !site.bottomStrand
+                ? ` on the ${site.bottomStrand ? "bottom" : "top"} strand`
+                : "") +
+              `, but the annotation says ${oneBased(want.start)}–${oneBased(want.end)}. ` +
+              "Adding or trimming bases does not move the annotation.",
+            "warning"
+          )
+        );
+      }
+
       alignHost.appendChild(alignmentBlock(site, clean, template(), isCircular()));
 
       const count = result.sites.length;
+      // One site needs a sentence, not a table with a single row in it —
+      // which matters most inside the Add/Edit Primer dialog, where every
+      // row of chrome pushes the alignment below the fold.
+      if (count === 1) {
+        sitesHost.appendChild(
+          h(
+            "div",
+            { className: "ove-ph-siteshead" },
+            `One binding site: ${oneBased(site.start)}–${oneBased(site.end)}, ` +
+              `${site.bottomStrand ? "bottom" : "top"} strand, ` +
+              `${site.annealLength} nt pairing` +
+              (site.mismatchCount ? `, ${site.mismatchCount} mismatch${site.mismatchCount > 1 ? "es" : ""}` : "") +
+              (site.fivePrimeOnly ? ", 3′ end unpaired" : ""),
+            button("Go to", () => goToSite(site), {
+              minimal: true,
+              icon: "locate",
+              title: "Select this site in the editor",
+            })
+          )
+        );
+        return;
+      }
       sitesHost.appendChild(
         h(
           "div",
           { className: "ove-ph-siteshead" },
-          count === 1 ? "One binding site" : `${count} binding sites, best first`,
-          count > 1 ? h("span", { className: "ove-cl-hint" }, " — click one to show it, or go to it on the map") : null
+          `${count} binding sites, best first`,
+          h("span", { className: "ove-cl-hint" }, " — click one to show it, or go to it on the map")
         )
       );
       sitesHost.appendChild(
@@ -376,7 +461,7 @@
           }
         )
       );
-      if (count > 1 && !result.sites[0].fivePrimeOnly) {
+      if (!result.sites[0].fivePrimeOnly) {
         sitesHost.appendChild(
           U.callout("More than one site: this primer can prime in several places, which is the usual reason for extra bands.", "warning")
         );
@@ -408,7 +493,10 @@
     const el = h(
       "div",
       { className: `ove-ph${opts.compact ? " ove-ph-compact" : ""}` },
-      input,
+      opts.showInput === false ? null : input,
+      // the verdict comes before the numbers: a panel headed "where this
+      // primer binds" has to lead with "it doesn't" when it doesn't
+      message,
       h(
         "div",
         { className: "ove-cl-row ove-ph-toolbar" },
@@ -418,7 +506,6 @@
         stats
       ),
       paramsPanel,
-      message,
       alignHost,
       sitesHost
     );
@@ -435,6 +522,13 @@
       getSites: () => result.sites,
       getResult: () => result,
       refresh: compute,
+      // re-draw from the sites already found, for when something outside the
+      // sequence changed (the annotation's coordinates, say) and rescanning
+      // the template would be wasted work
+      redraw: () => {
+        renderStats();
+        renderSites();
+      },
       focus: () => input.focus(),
     };
   }

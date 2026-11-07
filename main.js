@@ -1,6 +1,6 @@
 /* eslint-disable no-console*/
 // Modules to control application life and create native browser window
-const { app, BrowserWindow, ipcMain, dialog, Menu } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, Menu, screen } = require("electron");
 const path = require("path");
 const bioParsers = require("bio-parsers");
 const fs = require("fs");
@@ -167,9 +167,15 @@ async function createWindow({ initialSeqJson, filePath, windowToUse, position } 
       return;
     }
   }
+  // Sized to the screen it opens on, not a fixed 1000x800: the Add/Edit
+  // Primer dialog alone is ~900px tall once the hybridisation view is in it,
+  // and a window shorter than its own dialogs makes them scroll from the
+  // first moment. electron-window-state still remembers whatever size the
+  // window is left at, so this only sets where a new one starts.
+  const { workAreaSize } = screen.getPrimaryDisplay();
   const mainWindowState = windowStateKeeper({
-    defaultWidth: 1000,
-    defaultHeight: 800,
+    defaultWidth: Math.min(1600, Math.max(1000, workAreaSize.width - 40)),
+    defaultHeight: Math.min(1100, Math.max(800, workAreaSize.height - 40)),
   });
   // a tab torn off with the mouse opens where it was dropped
   const origin = position || { x: mainWindowState.x, y: mainWindowState.y };
