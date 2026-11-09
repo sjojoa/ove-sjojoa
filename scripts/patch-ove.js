@@ -179,6 +179,16 @@ const patches = [
     to: "  })), null /* ove: upstream Tm removed; the hybridisation view reports it */));",
   },
   {
+    // The bases field re-colours itself against the binding coordinates, so
+    // when those move its DOM is replaced under the caret and typing jumps
+    // back to the start. Upstream restores the caret only when the bases
+    // themselves change; now that the coordinates follow the bases, they
+    // move on the same keystroke.
+    name: "caret survives the binding site moving while you type",
+    from: "  Object(react[\"useEffect\"])(function () {\n    EditCaretPosition.restoreSelection(inputRef.current, caretPosition);\n    // eslint-disable-next-line react-hooks/exhaustive-deps\n  }, [bases]);",
+    to: "  Object(react[\"useEffect\"])(function () {\n    EditCaretPosition.restoreSelection(inputRef.current, caretPosition);\n    // eslint-disable-next-line react-hooks/exhaustive-deps\n  }, [bases]);\n  Object(react[\"useEffect\"])(function () {\n    var el = inputRef.current;\n    // only while this field is the one being typed in: otherwise clicking a\n    // binding site in the list below would pull the caret up here\n    if (el && (el === document.activeElement || el.contains(document.activeElement))) {\n      EditCaretPosition.restoreSelection(el, caretPosition);\n    }\n    // eslint-disable-next-line react-hooks/exhaustive-deps\n  }, [start, end, forward]);",
+  },
+  {
     name: "alignment tool note reflects the built-in local aligner",
     from: "Note: This tool requires an alignment server to be hooked up for it to work properly. It will NOT work in the OVE demo page.",
     to: "Alignments run locally on this computer (no server needed). Tip: add .ab1 files, tick \\\"Align Sequencing Reads to Reference Sequence\\\" and optionally \\\"Auto-Trim\\\".",
