@@ -77,7 +77,10 @@ Owczarzy (2008) salt correction, and match Biopython's `Tm_NN` to within 0.001 �
   the primer is positioned at all: *Bind Start* and *Bind End* are gone, the bases are the
   primer, and the annotation follows the site computed from them. Type a base, paste a
   different oligo, hit *Reverse complement*, or pick another row in the site list, and the
-  primer moves to where those bases actually bind — strand included. When they bind
+  primer moves to where those bases actually bind — strand included. *Strand* reads out
+  which way the computed site runs, and doubles as a second reverse-complement control:
+  flip it by hand and the bases are replaced by their reverse complement, which is the
+  primer binding the other strand of the same place. When they bind
   nowhere the annotation is left where it was and the panel says so, naming the stretch
   that does pair if the reason is an unpaired 3′ end.
 - **Hybridisation parameters you can see and change** — which sites are reported is set by

@@ -21,6 +21,12 @@
   let view = null;
   let syncTimer = null;
   let lastRange = "";
+  // Strand tracking: which way the form says the primer runs, which dialog
+  // that reading belongs to, and the value we ourselves last wrote (so a
+  // strand set by the computed site is not mistaken for a hand flip).
+  let dialogKey = null;
+  let lastForward = true;
+  let pendingForward = null;
 
   const seqData = () => (props && props.sequenceData) || {};
   const template = () => seqData().sequence || "";
@@ -61,7 +67,10 @@
     const forward = !site.bottomStrand;
     if (Number(props.start) !== start) props.change("start", start);
     if (Number(props.end) !== end) props.change("end", end);
-    if ((props.forward !== false) !== forward) props.change("forward", forward);
+    if ((props.forward !== false) !== forward) {
+      pendingForward = forward;
+      props.change("forward", forward);
+    }
   }
 
   function build(el) {
@@ -69,6 +78,7 @@
     if (!U || !window.ovePrimerView) return;
     host = el;
     el.innerHTML = "";
+    lastRange = "";
     const doc = window.oveTabs && window.oveTabs.getActive();
     view = window.ovePrimerView.create({
       bases: startingBases(),
@@ -121,11 +131,45 @@
     build(el);
   }
 
+  // The Strand radio reads out which way the computed site runs, and doubles
+  // as a reverse-complement button: flip it by hand and the bases are replaced
+  // by their reverse complement, which is the primer that binds the other
+  // strand of the same place. The site is then recomputed from those bases as
+  // usual, so the radio ends up agreeing with itself.
+  //
+  // Only a flip the user made counts. A strand that came from applySite was
+  // our own doing and must not complement anything, or picking a bottom-strand
+  // site from the list would silently rewrite the oligo.
+  function trackStrand() {
+    const key = JSON.stringify((props && props.initialValues) || null);
+    const forward = props.forward !== false;
+    if (key !== dialogKey) {
+      // a different annotation: take its strand as the starting reading
+      dialogKey = key;
+      lastForward = forward;
+      pendingForward = null;
+      return false;
+    }
+    if (forward === lastForward) return false;
+    lastForward = forward;
+    const ours = pendingForward === forward;
+    pendingForward = null;
+    if (ours) return false;
+    const bases = (props.bases || "").replace(/[^A-Za-z]/g, "");
+    const H = window.ovePrimerHybridization;
+    if (!bases || !H || !props.change) return false;
+    props.change("bases", H.reverseComplement(bases).toUpperCase());
+    // the change re-renders the dialog, which schedules another sync; that
+    // one does the rescan against the new bases
+    return true;
+  }
+
   // The dialog's Bases field is the one place bases are typed, so the view
   // follows it. Deferred out of the React render pass, because recomputing
   // calls back into the form.
   function sync() {
     if (!view || !props) return;
+    if (trackStrand()) return;
     const next = (props.bases || "").replace(/[^A-Za-z]/g, "").toUpperCase();
     if (next && next !== view.getBases()) {
       view.setBases(next);
