@@ -32,6 +32,11 @@ function setWindowTitle(name) {
 // a sequence or put it somewhere else. A tab that has never been written
 // anywhere has nothing to overwrite, so Save asks too.
 //
+// Either way the file written becomes the tab's file, so the next plain Save
+// goes to the place you last chose. Upstream treated Save As as "export a
+// copy and keep editing the old file", which meant renaming a construct
+// quietly left you still overwriting its previous name.
+//
 // `sequenceDataToSave` is what OVE's own save wrapper hands us (tidied, with
 // annotations as objects). The guard has no such wrapper to go through, so it
 // calls this with nothing and we take the live state instead.
@@ -77,23 +82,20 @@ async function saveDoc(doc, { isSaveAs = false, sequenceDataToSave, onSuccessCal
     sequenceDataToSave.name = sequenceDataToSave.name.replace(`.${extensions[0]}`, "");
   });
 
-  if (!isSaveAs) {
-    doc.filePath = newFilePath;
-    window.oveTabs.renameDoc(doc.id, sequenceDataToSave.name);
-    // a tab that is not the visible one has no live editor to update; its
-    // snapshot already holds what we just wrote
-    if (doc.editor) {
-      doc.editor.updateEditor({
-        //update the name of the seq without triggering the undo/redo stack tracking
-        sequenceData: sequenceDataToSave,
-      });
-    }
+  doc.filePath = newFilePath;
+  window.oveTabs.renameDoc(doc.id, sequenceDataToSave.name);
+  // a tab that is not the visible one has no live editor to update; its
+  // snapshot already holds what we just wrote
+  if (doc.editor) {
+    doc.editor.updateEditor({
+      //update the name of the seq without triggering the undo/redo stack tracking
+      sequenceData: sequenceDataToSave,
+    });
   }
 
   window.api.send("ove_saveFile", {
     filePath: newFilePath,
     sequenceDataToSave,
-    isSaveAs,
   });
   // This tab is now clean as far as the guard is concerned. OVE keeps its
   // own lastSavedId, but it stamps it from a .then() that runs whether or

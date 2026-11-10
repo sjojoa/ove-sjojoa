@@ -24,11 +24,82 @@ describe("which tabs hold unsaved work (#8)", () => {
     assert.strictEqual(isDirty(t), true);
   });
 
+  it("is clean again after an edit is undone back to the file's content", () => {
+    // the file as parsed: this is what the baseline is taken from
+    const t = tab({
+      seqJson: {
+        sequence: "acgtacgtacgt",
+        stateTrackingId: INITIAL,
+        features: { f1: { id: "f1", name: "prom", start: 0, end: 5 } },
+      },
+    });
+    assert.strictEqual(isDirty(t), false);
+
+    // delete the feature: a new tracking id, and the content really differs
+    t.seqJson = { ...t.seqJson, stateTrackingId: "edit1", features: {} };
+    assert.strictEqual(isDirty(t), true);
+
+    // undo. OVE stamps a *new* id rather than restoring the old one, so only
+    // comparing the content can tell that this matches the file again. The
+    // feature comes back with the same id here; the next test covers the case
+    // where it does not.
+    t.seqJson = {
+      ...t.seqJson,
+      stateTrackingId: "edit2",
+      features: { f1: { id: "f1", name: "prom", start: 0, end: 5 } },
+    };
+    assert.strictEqual(isDirty(t), false);
+  });
+
+  it("ignores annotation ids, so deleting and re-adding the same feature is not a change", () => {
+    const t = tab({
+      seqJson: {
+        sequence: "acgtacgtacgt",
+        stateTrackingId: INITIAL,
+        features: { f1: { id: "f1", name: "prom", start: 0, end: 5 } },
+      },
+    });
+    assert.strictEqual(isDirty(t), false);
+    t.seqJson = {
+      ...t.seqJson,
+      stateTrackingId: "edit1",
+      features: { somethingElse: { id: "somethingElse", name: "prom", start: 0, end: 5 } },
+    };
+    assert.strictEqual(isDirty(t), false);
+  });
+
+  it("notices a real change to an annotation", () => {
+    const t = tab({
+      seqJson: {
+        sequence: "acgtacgtacgt",
+        stateTrackingId: INITIAL,
+        features: { f1: { id: "f1", name: "prom", start: 0, end: 5 } },
+      },
+    });
+    assert.strictEqual(isDirty(t), false);
+    for (const change of [
+      { features: { f1: { id: "f1", name: "promoter", start: 0, end: 5 } } },
+      { features: { f1: { id: "f1", name: "prom", start: 1, end: 5 } } },
+      { features: { f1: { id: "f1", name: "prom", start: 0, end: 5, forward: false } } },
+      { sequence: "acgtacgtacgtt" },
+      { sequence: "ACGTACGTACGT" },
+      { circular: true },
+    ]) {
+      const edited = tab({
+        seqJson: { ...t.seqJson, stateTrackingId: "e" + JSON.stringify(change), ...change },
+        savedFingerprint: t.savedFingerprint,
+        savedTrackingId: t.savedTrackingId,
+      });
+      assert.strictEqual(isDirty(edited), true, JSON.stringify(change));
+    }
+  });
+
   it("is clean again once that exact state has been written", () => {
     const t = tab({ seqJson: { sequence: "acgt", stateTrackingId: "abc123" } });
     markSaved(t);
     assert.strictEqual(isDirty(t), false);
-    t.seqJson.stateTrackingId = "def456"; // edited again
+    // edited again, and really different
+    t.seqJson = { sequence: "acgta", stateTrackingId: "def456" };
     assert.strictEqual(isDirty(t), true);
   });
 

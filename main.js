@@ -334,7 +334,7 @@ app.on("activate", function () {
 
 ipcMain.handle(
   "ove_saveFile",
-  (event, { sequenceDataToSave, filePath, isSaveAs }) => {
+  (event, { sequenceDataToSave, filePath }) => {
     const browserWindow = BrowserWindow.fromWebContents(event.sender);
 
     const ext = path.extname(filePath);
@@ -364,13 +364,14 @@ ipcMain.handle(
     }
     fs.writeFileSync(filePath, formattedSeqString);
     noteRecentFile(filePath);
-    !isSaveAs &&
-      windows.forEach((w) => {
-        if (w.bw === browserWindow) {
-          //update the __filePath prop we're saving on the window to prevent opening the same file twice
-          w.__filePath = filePath;
-        }
-      });
+    // Save and Save As both retarget the tab, so the window's record of which
+    // file it is showing follows either way.
+    windows.forEach((w) => {
+      if (w.bw === browserWindow) {
+        //update the __filePath prop we're saving on the window to prevent opening the same file twice
+        w.__filePath = filePath;
+      }
+    });
   }
 );
 

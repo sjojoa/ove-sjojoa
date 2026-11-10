@@ -58,8 +58,10 @@ Owczarzy (2008) salt correction, and match Biopython's `Tm_NN` to within 0.001 �
   clicking anything; hovering turns the dot back into a ×. Closing such a tab, its window,
   or the app asks **Save / Save As / Cancel / Don't Save**, one tab at a time, and Cancel
   anywhere stops the whole thing. Save overwrites the file the tab came from; Save As asks
-  where to put it, which is how to rename it or move it. Cancelling the save dialog cancels
-  the close too. A tab that
+  where to put it, which is how to rename it or move it, and the tab then belongs to the
+  new file. Cancelling the save dialog cancels the close too. An edit that has been undone
+  back to the file's own content does not count as unsaved: the check compares what would
+  be written against what was last read or written, not just whether anything happened. A tab that
   matches its file closes without ceremony, and moving a tab between windows is not a
   close, so it never asks. A sequence that has never been written anywhere — a PCR
   product, an assembly, a digest fragment straight out of the Cloning menu — counts as
@@ -195,6 +197,7 @@ keyboard ones are handled by this app's own Edit menu:
 | Backspace on a clicked feature deleted the sequence under it | clicking an annotation selects its bases, and the key binding saw only the selection, so the obvious way to remove a feature silently cut bases out of the construct; it now deletes the annotation when the selection is still exactly that annotation's range |
 | File → Save and Save As threw before reaching the dialog | the handler took a `doc` parameter that shadowed the tab in scope and was never passed one, so every save failed with `Cannot read properties of undefined (reading 'filePath')` — nothing in this fork could be saved from the File menu or the toolbar |
 | Save asked where to put the file every time | even for a sequence opened from a file a moment earlier, so saving a construct repeatedly meant re-confirming the same path; Save now overwrites the file the tab came from and Save As is the one that asks |
+| Save As left the tab editing the old file | renaming a construct through Save As wrote the copy and then quietly went on overwriting its previous name on the next Save; the tab now belongs to the file it was last written to |
 | closing a tab or window discarded unsaved work without a word | no dirty flag existed anywhere, and a sequence built in the Cloning tools lives only in its tab; closing now asks, and the tab strip shows which tabs are unsaved |
 | a cancelled save still marked the sequence saved | OVE stamps its `lastSavedId` from a `.then()` that runs whether or not a file was written, so the save icon went quiet after you cancelled the dialog; the unsaved-changes guard keeps its own record per tab |
 
