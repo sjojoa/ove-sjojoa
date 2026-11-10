@@ -27,78 +27,83 @@ function setWindowTitle(name) {
 // Saving one tab. Returns true if a file was actually written, false if the
 // user cancelled, so the unsaved-changes guard (#8) can tell the difference.
 //
+// Save overwrites the file the tab came from, with no dialog, which is what
+// Save means everywhere else. Save As always asks, so it is the way to rename
+// a sequence or put it somewhere else. A tab that has never been written
+// anywhere has nothing to overwrite, so Save asks too.
+//
 // `sequenceDataToSave` is what OVE's own save wrapper hands us (tidied, with
 // annotations as objects). The guard has no such wrapper to go through, so it
 // calls this with nothing and we take the live state instead.
 async function saveDoc(doc, { isSaveAs = false, sequenceDataToSave, onSuccessCallback } = {}) {
-    if (!doc) return false;
-    if (!sequenceDataToSave) {
-      const live = doc.editor ? doc.editor.getState().sequenceData : doc.seqJson;
-      sequenceDataToSave = JSON.parse(JSON.stringify(live || {}));
-    }
-    const filters = [
-      { name: "Genbank", extensions: ["gb"] },
-      { name: "Fasta", extensions: ["fasta"] },
-      { name: "TeselaGen JSON", extensions: ["json"] },
-      { name: "Bed", extensions: ["bed"] },
-      // the lab's inline-tagged format: features written between the bases,
-      // which is what gets pasted into notes and protocols
-      { name: "Tagged text", extensions: ["txt"] },
-    ];
+  if (!doc) return false;
+  if (!sequenceDataToSave) {
+    const live = doc.editor ? doc.editor.getState().sequenceData : doc.seqJson;
+    sequenceDataToSave = JSON.parse(JSON.stringify(live || {}));
+  }
+  const filters = [
+    { name: "Genbank", extensions: ["gb"] },
+    { name: "Fasta", extensions: ["fasta"] },
+    { name: "TeselaGen JSON", extensions: ["json"] },
+    { name: "Bed", extensions: ["bed"] },
+    // the lab's inline-tagged format: features written between the bases,
+    // which is what gets pasted into notes and protocols
+    { name: "Tagged text", extensions: ["txt"] },
+  ];
 
+  let newFilePath = doc.filePath;
+  if (isSaveAs || !newFilePath) {
     let nameToUse;
     let defaultPath = "~/Downloads/";
     if (doc.filePath) {
       nameToUse = doc.filePath.slice(doc.filePath.lastIndexOf("/") + 1);
       defaultPath = doc.filePath.slice(0, doc.filePath.lastIndexOf("/") + 1);
     }
-    nameToUse =
-      nameToUse || `${sequenceDataToSave.name || "Untitled_Sequence"}.gb`;
-    const newFilePath = await window.api.send("ove_showSaveDialog", {
+    nameToUse = nameToUse || `${sequenceDataToSave.name || "Untitled_Sequence"}.gb`;
+    newFilePath = await window.api.send("ove_showSaveDialog", {
       filters,
       title: nameToUse,
       defaultPath: defaultPath + nameToUse,
       buttonLabel: `Save file ${isSaveAs ? "as" : ""}`,
     });
-
     if (!newFilePath) {
       return false; //cancel the save!
     }
+  }
 
-    sequenceDataToSave.name = newFilePath.slice(
-      newFilePath.lastIndexOf("/") + 1
-    );
-    filters.forEach(({ extensions }) => {
-      //strip the extension from the name
-      sequenceDataToSave.name = sequenceDataToSave.name.replace(
-        `.${extensions[0]}`,
-        ""
-      );
-    });
+  sequenceDataToSave.name = newFilePath.slice(newFilePath.lastIndexOf("/") + 1);
+  filters.forEach(({ extensions }) => {
+    //strip the extension from the name
+    sequenceDataToSave.name = sequenceDataToSave.name.replace(`.${extensions[0]}`, "");
+  });
 
-    if (!isSaveAs) {
-      doc.filePath = newFilePath;
-      window.oveTabs.renameDoc(doc.id, sequenceDataToSave.name);
+  if (!isSaveAs) {
+    doc.filePath = newFilePath;
+    window.oveTabs.renameDoc(doc.id, sequenceDataToSave.name);
+    // a tab that is not the visible one has no live editor to update; its
+    // snapshot already holds what we just wrote
+    if (doc.editor) {
       doc.editor.updateEditor({
         //update the name of the seq without triggering the undo/redo stack tracking
         sequenceData: sequenceDataToSave,
       });
     }
-
-    window.api.send("ove_saveFile", {
-      filePath: newFilePath,
-      sequenceDataToSave,
-      isSaveAs,
-    });
-    // This tab is now clean as far as the guard is concerned. OVE keeps its
-    // own lastSavedId, but it stamps it from a .then() that runs whether or
-    // not a file was written, so cancelling a save marks a sequence saved
-    // there; the tab's own record is the one the guard trusts.
-    window.oveUnsaved.markSaved(doc);
-    if (onSuccessCallback) onSuccessCallback();
-    window.toastr.success(`Sequence Saved to ${newFilePath}`);
-    return true;
   }
+
+  window.api.send("ove_saveFile", {
+    filePath: newFilePath,
+    sequenceDataToSave,
+    isSaveAs,
+  });
+  // This tab is now clean as far as the guard is concerned. OVE keeps its
+  // own lastSavedId, but it stamps it from a .then() that runs whether or
+  // not a file was written, so cancelling a save marks a sequence saved
+  // there; the tab's own record is the one the guard trusts.
+  window.oveUnsaved.markSaved(doc);
+  if (onSuccessCallback) onSuccessCallback();
+  window.toastr.success(`Sequence Saved to ${newFilePath}`);
+  return true;
+}
 
 window.oveSaveDoc = saveDoc;
 

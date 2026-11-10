@@ -68,7 +68,7 @@
   const dirtySignature = (docs) =>
     (docs || []).map((d) => (isDirty(d) ? "1" : "0")).join("");
 
-  // Ask about one tab. Returns "save" | "discard" | "cancel".
+  // Ask about one tab. Returns "save" | "saveAs" | "discard" | "cancel".
   // The dialog itself is the main process's, so the same question is asked
   // whether it came from the × on a tab or from closing the window.
   async function ask(doc) {
@@ -90,9 +90,10 @@
     const choice = await api.ask(doc);
     if (choice === "cancel") return false;
     if (choice === "discard") return true;
-    // Save: a cancelled save dialog means the close is cancelled too, which is
+    // Save overwrites the file this tab came from; Save As asks where to put
+    // it. Either way a cancelled save dialog cancels the close too, which is
     // what every editor does — you asked to save and then did not.
-    return !!(await save(doc));
+    return !!(await save(doc, { isSaveAs: choice === "saveAs" }));
   }
 
   const api = {

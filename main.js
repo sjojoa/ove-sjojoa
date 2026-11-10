@@ -451,21 +451,23 @@ ipcMain.handle("ove_closeDecision", (event, { token, ok }) => {
   resolve(!!ok);
 });
 
-// Save / Don't Save / Cancel, asked by the main process so the same dialog
-// appears whether the close started at a tab's x or at the window's.
+// Save / Save As / Cancel / Don't Save, asked by the main process so the same
+// dialog appears whether the close started at a tab's x or at the window's.
+// Save overwrites the file the tab came from; Save As asks where to put it,
+// which is the way to rename it or move it somewhere else.
 ipcMain.handle("ove_confirmClose", async (event, { name, hasFile }) => {
   const bw = BrowserWindow.fromWebContents(event.sender);
   const { response } = await dialog.showMessageBox(bw, {
     type: "warning",
-    buttons: ["Save", "Cancel", "Don't Save"],
+    buttons: ["Save", "Save As\u2026", "Cancel", "Don't Save"],
     defaultId: 0,
-    cancelId: 1,
+    cancelId: 2,
     message: `Do you want to save the changes you made to "${name}"?`,
     detail: hasFile
-      ? "Your changes will be lost if you don't save them."
-      : "This sequence has never been saved to a file. It will be lost for good if you don't save it.",
+      ? "Save overwrites the file this came from. Save As puts it somewhere else, under any name you like. Your changes will be lost if you don't save them."
+      : "This sequence has never been saved to a file, so both Save and Save As will ask where to put it. It will be lost for good if you don't save it.",
   });
-  return ["save", "cancel", "discard"][response] || "cancel";
+  return ["save", "saveAs", "cancel", "discard"][response] || "cancel";
 });
 
 ipcMain.handle("ove_focusThisWindow", (event) => {

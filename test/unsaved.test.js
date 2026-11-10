@@ -74,8 +74,8 @@ describe("the close guard (#8)", () => {
   const saveReturning = (result) => {
     const calls = [];
     return [
-      (doc) => {
-        calls.push(doc);
+      (doc, opts) => {
+        calls.push(opts || {});
         return Promise.resolve(result);
       },
       calls,
@@ -111,11 +111,24 @@ describe("the close guard (#8)", () => {
       assert.strictEqual(calls.length, 0);
     }));
 
-  it("saves first on Save, then closes", () =>
+  it("saves first on Save, then closes -- overwriting, not asking", () =>
     withAnswer("save", async () => {
       const [save, calls] = saveReturning(true);
       assert.strictEqual(await confirmClose(dirtyTab(), save), true);
-      assert.strictEqual(calls.length, 1);
+      assert.deepStrictEqual(calls, [{ isSaveAs: false }]);
+    }));
+
+  it("asks where to put it on Save As", () =>
+    withAnswer("saveAs", async () => {
+      const [save, calls] = saveReturning(true);
+      assert.strictEqual(await confirmClose(dirtyTab(), save), true);
+      assert.deepStrictEqual(calls, [{ isSaveAs: true }]);
+    }));
+
+  it("keeps the tab open if the Save As dialog is cancelled", () =>
+    withAnswer("saveAs", async () => {
+      const [save] = saveReturning(false);
+      assert.strictEqual(await confirmClose(dirtyTab(), save), false);
     }));
 
   it("keeps the tab open if the save dialog itself is cancelled", () =>
