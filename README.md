@@ -52,6 +52,21 @@ Owczarzy (2008) salt correction, and match Biopython's `Tm_NN` to within 0.001 �
 - **Per-feature colours** — a colour row in the Add/Edit Feature dialog, saved as a
   `/color=` qualifier so it survives a round trip through `.gb` and opens correctly elsewhere
 - **File → Open Recent** — last 10 files, ⌘1–⌘9, auto-pruned
+- **Unsaved changes are not thrown away silently**
+  ([`src/tabs/unsaved.js`](src/tabs/unsaved.js)) — a tab with unsaved work shows a filled
+  dot where its close button is, so you can see which of six tabs still needs saving before
+  clicking anything; hovering turns the dot back into a ×. Closing such a tab, its window,
+  or the app asks **Save / Cancel / Don't Save**, one tab at a time, and Cancel anywhere
+  stops the whole thing. Cancelling the save dialog cancels the close too. A tab that
+  matches its file closes without ceremony, and moving a tab between windows is not a
+  close, so it never asks. A sequence that has never been written anywhere — a PCR
+  product, an assembly, a digest fragment straight out of the Cloning menu — counts as
+  unsaved from the moment it holds bases, because there is no file to recover it from.
+- **Backspace on a selected annotation deletes the annotation**
+  ([`src/features/deleteAnnotation.js`](src/features/deleteAnnotation.js)) — click a
+  feature, part or primer and press Backspace or Delete and it is removed, undoably.
+  Upstream deleted the *bases* underneath instead. A selection you dragged out yourself
+  still deletes bases, as does a selection nudged off the annotation after clicking it.
 - **One CDS translation per reading frame, read through to the stop codon**
   ([`src/features/cdsReadThrough.js`](src/features/cdsReadThrough.js)). Upstream gives every
   CDS feature its own row of amino acids, so a tag + linker + gene construct stacks three
@@ -176,6 +191,9 @@ keyboard ones are handled by this app's own Edit menu:
 | the primer dialog printed its own melting temperature | ~6 °C from the one the hybridisation view and the Cloning menu report, on the same bases, a few pixels apart |
 | no per-base view of how a primer pairs | the Add/Edit Primer dialog showed bases and coordinates but never whether they pair where they claim to |
 | Backspace on a clicked feature deleted the sequence under it | clicking an annotation selects its bases, and the key binding saw only the selection, so the obvious way to remove a feature silently cut bases out of the construct; it now deletes the annotation when the selection is still exactly that annotation's range |
+| File → Save and Save As threw before reaching the dialog | the handler took a `doc` parameter that shadowed the tab in scope and was never passed one, so every save failed with `Cannot read properties of undefined (reading 'filePath')` — nothing in this fork could be saved from the File menu or the toolbar |
+| closing a tab or window discarded unsaved work without a word | no dirty flag existed anywhere, and a sequence built in the Cloning tools lives only in its tab; closing now asks, and the tab strip shows which tabs are unsaved |
+| a cancelled save still marked the sequence saved | OVE stamps its `lastSavedId` from a `.then()` that runs whether or not a file was written, so the save icon went quiet after you cancelled the dialog; the unsaved-changes guard keeps its own record per tab |
 
 ## Installing the app
 

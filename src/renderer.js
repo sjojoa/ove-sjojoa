@@ -24,9 +24,18 @@ function setWindowTitle(name) {
   document.title = ORIGINAL_TITLE + " -- " + (name || "Untitled Sequence");
 }
 
-const handleSave =
-  (isSaveAs, doc) =>
-  async (event, sequenceDataToSave, editorProps, onSuccessCallback) => {
+// Saving one tab. Returns true if a file was actually written, false if the
+// user cancelled, so the unsaved-changes guard (#8) can tell the difference.
+//
+// `sequenceDataToSave` is what OVE's own save wrapper hands us (tidied, with
+// annotations as objects). The guard has no such wrapper to go through, so it
+// calls this with nothing and we take the live state instead.
+async function saveDoc(doc, { isSaveAs = false, sequenceDataToSave, onSuccessCallback } = {}) {
+    if (!doc) return false;
+    if (!sequenceDataToSave) {
+      const live = doc.editor ? doc.editor.getState().sequenceData : doc.seqJson;
+      sequenceDataToSave = JSON.parse(JSON.stringify(live || {}));
+    }
     const filters = [
       { name: "Genbank", extensions: ["gb"] },
       { name: "Fasta", extensions: ["fasta"] },
@@ -53,7 +62,7 @@ const handleSave =
     });
 
     if (!newFilePath) {
-      return; //cancel the save!
+      return false; //cancel the save!
     }
 
     sequenceDataToSave.name = newFilePath.slice(
@@ -81,9 +90,17 @@ const handleSave =
       sequenceDataToSave,
       isSaveAs,
     });
-    onSuccessCallback();
+    // This tab is now clean as far as the guard is concerned. OVE keeps its
+    // own lastSavedId, but it stamps it from a .then() that runs whether or
+    // not a file was written, so cancelling a save marks a sequence saved
+    // there; the tab's own record is the one the guard trusts.
+    window.oveUnsaved.markSaved(doc);
+    if (onSuccessCallback) onSuccessCallback();
     window.toastr.success(`Sequence Saved to ${newFilePath}`);
-  };
+    return true;
+  }
+
+window.oveSaveDoc = saveDoc;
 
 // Builds the editor for one tab. `doc` is the tab manager's record for it.
 // `restoring` is true when a tab is being shown again after being unmounted:
@@ -135,8 +152,13 @@ window.oveMakeEditor = function oveMakeEditor(container, doc, restoring) {
   },
   // onNew: () => {}, //unless this callback is defined, don't show the option to create a new seq
   // onDuplicate: () => {}, //unless this callback is defined, don't show the option to create a new seq
-  onSaveAs: handleSave(true),
-  onSave: handleSave(),
+  // upstream passed no `doc`, and the parameter shadowed the one in scope, so
+  // every Save and Save As threw "Cannot read properties of undefined
+  // (reading 'filePath')" before it reached the dialog
+  onSaveAs: (event, sequenceDataToSave, editorProps, onSuccessCallback) =>
+    saveDoc(doc, { isSaveAs: true, sequenceDataToSave, onSuccessCallback }),
+  onSave: (event, sequenceDataToSave, editorProps, onSuccessCallback) =>
+    saveDoc(doc, { sequenceDataToSave, onSuccessCallback }),
   onImport: (sequenceData) => {
     try {
       doc.editor.updateEditor({

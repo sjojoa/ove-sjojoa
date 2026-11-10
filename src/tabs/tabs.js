@@ -51,9 +51,16 @@
       label.textContent = doc.name;
       tab.appendChild(label);
 
+      // A tab with unsaved changes shows a filled dot where its close button
+      // is; hovering turns the dot back into a ×, so closing still takes one
+      // click. The point is to see which of six tabs still needs saving
+      // before clicking anything (#8).
+      const dirty = window.oveUnsaved && window.oveUnsaved.isDirty(doc);
+      if (dirty) tab.classList.add("ove-tab-dirty");
+
       const close = document.createElement("button");
       close.className = "ove-tab-close";
-      close.title = "Close tab";
+      close.title = dirty ? "Close tab (unsaved changes)" : "Close tab";
       close.textContent = "×";
       close.addEventListener("pointerdown", (e) => e.stopPropagation());
       close.addEventListener("click", (e) => {
@@ -140,6 +147,21 @@
     }, 0);
   }
 
+  // Nothing tells us when a sequence changes -- the edit happens inside the
+  // editor's own store -- so the strip checks. Only the answer to "which tabs
+  // are dirty" is compared, and a rebuild only happens when it changes, so
+  // this costs a string comparison a second.
+  let dirtySig = "";
+  function watchDirty() {
+    setInterval(() => {
+      if (!window.oveUnsaved || !strip) return;
+      const sig = window.oveUnsaved.dirtySignature(docs);
+      if (sig === dirtySig) return;
+      dirtySig = sig;
+      renderStrip();
+    }, 1000);
+  }
+
   // ------------------------------------------------------------- doc list
   function nameFor(seqJson, filePath) {
     if (filePath) return filePath.slice(filePath.lastIndexOf("/") + 1);
@@ -184,7 +206,19 @@
     return doc;
   }
 
-  function closeDoc(id) {
+  // Close with the unsaved-changes guard in front of it (#8). Everything the
+  // user can click goes through here: the ×, middle-click, the tab context
+  // menu, and the main process when a window or the app is closing.
+  async function closeDoc(id) {
+    const doc = docById(id);
+    if (!doc) return false;
+    const guard = window.oveUnsaved;
+    if (guard && !(await guard.confirmClose(doc, window.oveSaveDoc))) return false;
+    forceCloseDoc(id);
+    return true;
+  }
+
+  function forceCloseDoc(id) {
     const i = docs.findIndex((d) => d.id === id);
     if (i === -1) return;
     const [doc] = docs.splice(i, 1);
@@ -319,7 +353,8 @@
       payload: serialize(current.doc),
       isOnlyTab: docs.length === 1,
     });
-    if (res && res.accepted) closeDoc(current.doc.id);
+    // torn off into another window: the tab moved, nothing was thrown away
+    if (res && res.accepted) forceCloseDoc(current.doc.id);
   }
 
   // --------------------------------------------------- select all (Cmd+A)
@@ -388,12 +423,32 @@
       addDoc({ seqJson: payload.seqJson, filePath: payload.filePath });
       window.api.send("ove_focusThisWindow");
     });
-    window.api.on("ove_closeTab", ({ docId }) => closeDoc(docId));
+    // Only sent when a tab has been *moved* to another window, so the sequence
+    // is not being discarded and the unsaved-changes guard would be wrong here.
+    window.api.on("ove_closeTab", ({ docId }) => forceCloseDoc(docId));
+    // The window (or the whole app) is closing. Main vetoes its own close
+    // event and waits for this answer, so the dialog is up before anything is
+    // thrown away. Tabs are asked about one at a time, in strip order, and
+    // the first Cancel stops the whole thing.
+    window.api.on("ove_requestClose", async ({ token }) => {
+      let ok = true;
+      for (const doc of [...docs]) {
+        if (!window.oveUnsaved) break;
+        activate(doc.id); // show what is being asked about
+        // eslint-disable-next-line no-await-in-loop
+        if (!(await window.oveUnsaved.confirmClose(doc, window.oveSaveDoc))) {
+          ok = false;
+          break;
+        }
+      }
+      window.api.send("ove_closeDecision", { token, ok });
+    });
     window.api.on("ove_selectAll", selectAll);
     window.api.on("ove_find", focusFind);
     window.api.on("ove_warn", ({ title, messages }) => warn(title, messages));
 
     addDoc(first);
+    watchDirty();
     // tell the main process it is safe to push tabs to this window now
     window.api.send("ove_rendererReady");
   }
@@ -405,6 +460,7 @@
     warn,
     addDoc,
     closeDoc,
+    forceCloseDoc,
     renameDoc,
     activate,
     getActive,
