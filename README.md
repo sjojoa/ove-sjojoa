@@ -175,6 +175,7 @@ keyboard ones are handled by this app's own Edit menu:
 | primer bases and binding coordinates were independent fields | adding a base left the annotation behind, and the dialog then marked most of the oligo red against a stretch of template it was never meant to sit on; the coordinates are now computed from the bases |
 | the primer dialog printed its own melting temperature | ~6 °C from the one the hybridisation view and the Cloning menu report, on the same bases, a few pixels apart |
 | no per-base view of how a primer pairs | the Add/Edit Primer dialog showed bases and coordinates but never whether they pair where they claim to |
+| Backspace on a clicked feature deleted the sequence under it | clicking an annotation selects its bases, and the key binding saw only the selection, so the obvious way to remove a feature silently cut bases out of the construct; it now deletes the annotation when the selection is still exactly that annotation's range |
 
 ## Installing the app
 
