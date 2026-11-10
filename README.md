@@ -230,6 +230,15 @@ yarn build-mac       # signed/notarised build; needs APPLEID + APPLEIDPASS
   arrows and their `c.`/`p.` descriptions have been read off real traces.
 - **Adding features and primers** — annotating sequences in the editor, including the
   per-feature colours added here, and round-tripping them through `.gb`.
+- **The primer features** — the hybridisation view, the binding-site search and its
+  parameters, the pasted-primer path into Simulate PCR, and the rebuilt Add/Edit Primer
+  dialog (bases drive the annotation; the Strand radio reverse-complements) have been
+  exercised against real plasmids and behave as described above: the sites they report
+  are the sites those oligos pair at, strand and 5′ tails included. **The Tm numbers
+  shown alongside them are still pending** — the arithmetic is checked against Biopython
+  (below), but which Tm model this fork should present for primer work has not been
+  settled (issue #12), so read a reported Tm as indicative and do not order oligos off it
+  without checking.
 
 **Everything else is unvalidated.** The Cloning menu (primer design, restriction cloning,
 mutagenesis, Gibson assembly, the gel simulator) and the CDS read-through translations are
@@ -244,7 +253,7 @@ within 0.001 °C across 200 random primers under four buffer conditions. That va
 Tm arithmetic, not the primer-design decisions built on top of it.
 
 ```bash
-yarn test   # 63 unit tests
+yarn test   # 160 unit tests
 ```
 
 ## Licence
