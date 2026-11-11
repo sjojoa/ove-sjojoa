@@ -12,7 +12,14 @@ let isMacOpenTriggered = false;
 // Keep a global reference of the window object, if you don't, the window will
 // be closed automatically when the JavaScript object is garbage collected.
 const windows = [];
+// The windows closed during this run, most recent first, for
+// File > Reopen Last Closed Window (#7). In memory only: it is about undoing a
+// misclick in the session you are in. Declared up here because the menu is
+// built while this file is still being evaluated.
+const closedWindows = [];
+const REOPEN_DEPTH = 10;
 const recentFiles = require("./src/main_utils/recentFiles");
+const session = require("./src/main_utils/session");
 const taggedText = require("./src/features/taggedText");
 const pastedBases = require("./src/features/pastedBases");
 const sequenceFileFilters = require("./src/main_utils/sequenceFileFilters");
@@ -30,7 +37,14 @@ const featureTypeColor = (type) => {
 };
 
 const rebuildMenu = () =>
-  createMenu({ windows, createWindow, getSeqJsonFromPath, openPath });
+  createMenu({
+    windows,
+    createWindow,
+    getSeqJsonFromPath,
+    openPath,
+    reopenLastClosedWindow: () => reopenLastClosedWindow(),
+    canReopenClosedWindow: () => canReopenClosedWindow(),
+  });
 
 // Open a file by path: used by File > Open, File > Open Recent and the Dock's
 // recent documents. Records it in the recent list and refreshes the menu.
@@ -99,6 +113,9 @@ ipcMain.handle("ove_rendererReady", (event) => {
   const queued = win.__ovePendingTabs || [];
   win.__ovePendingTabs = [];
   queued.forEach((payload) => win.webContents.send("ove_addTab", payload));
+  const messages = win.__ovePendingMessages || [];
+  win.__ovePendingMessages = [];
+  messages.forEach(({ channel, payload }) => win.webContents.send(channel, payload));
 });
 
 const pointInBounds = (b, x, y) =>
@@ -233,6 +250,7 @@ console.log(`initialSeqJson:`,initialSeqJson)
   });
 
   // Emitted when the window is closed.
+  const closingWindow = newWindow;
   newWindow.on("closed", function () {
     // Dereference the window object, usually you would store windows
     // in an array if your app supports multi windows, this is the time
@@ -244,8 +262,70 @@ console.log(`initialSeqJson:`,initialSeqJson)
       }
     });
     windows.splice(indexToSplice, 1);
+    const snapshot = closingWindow.__session;
+    rememberClosedWindow(snapshot);
+    // Closing the last window is the end of a session as far as restoring goes.
+    // On macOS the app lives on with no windows, so waiting for the quit would
+    // mean saving nothing. A window closed while others remain is not the end
+    // of anything, and a quit writes the whole set itself.
+    if (!quitting && !windows.length && snapshot) session.save([snapshot]);
     newWindow = null;
   });
+
+  return newWindow;
+}
+
+// ------------------------------------------- reopen what was open (#7)
+//
+// One window per saved window, its tabs in the order they were in. The first
+// path makes the window (a window created empty would leave a stray Untitled
+// tab beside the restored ones); the rest are sent to that same window, which
+// queues them until its page is ready.
+async function openWindowWithPaths({ paths, activePath }) {
+  let target = null;
+  for (const filePath of paths) {
+    // eslint-disable-next-line no-await-in-loop
+    const seqJson = await getSeqJsonFromPath(filePath).catch(() => null);
+    // a file that has become unreadable since last time is skipped, quietly
+    if (!seqJson || !seqJson.sequence) continue;
+    if (target) {
+      sendTab(target, { seqJson, filePath });
+    } else {
+      // eslint-disable-next-line no-await-in-loop
+      target = await createWindow({ initialSeqJson: seqJson, filePath });
+    }
+    noteRecentFile(filePath);
+  }
+  if (target && activePath && activePath !== paths[0]) {
+    sendWhenReady(target, "ove_activateTab", { filePath: activePath });
+  }
+  return target;
+}
+
+// Like sendTab, but for any message a freshly created window cannot receive
+// until its page has registered its listeners.
+function sendWhenReady(win, channel, payload) {
+  if (!win || win.isDestroyed()) return;
+  if (win.__oveReady) win.webContents.send(channel, payload);
+  else (win.__ovePendingMessages = win.__ovePendingMessages || []).push({ channel, payload });
+}
+
+function rememberClosedWindow(snapshot) {
+  if (!snapshot || !snapshot.paths || !snapshot.paths.length) return;
+  closedWindows.unshift(snapshot);
+  closedWindows.length = Math.min(closedWindows.length, REOPEN_DEPTH);
+  rebuildMenu();
+}
+
+function reopenLastClosedWindow() {
+  const snapshot = closedWindows.shift();
+  if (!snapshot) return;
+  rebuildMenu();
+  openWindowWithPaths(snapshot);
+}
+
+function canReopenClosedWindow() {
+  return closedWindows.length > 0;
 }
 
 app.on("open-file", async (event, path) => {
@@ -278,8 +358,31 @@ app.on("ready", async () => {
     const startupPaths = process.argv
       .slice(1)
       .filter((a) => a && a !== "." && !a.startsWith("-") && fs.existsSync(a) && fs.statSync(a).isFile());
-    if (startupPaths.length) startupPaths.forEach((p) => openPath(p));
-    else createWindow({});
+    if (startupPaths.length) {
+      // Double-clicking a .gb opens that file and nothing else: asked for one
+      // sequence, get one sequence.
+      startupPaths.forEach((p) => openPath(p));
+    } else {
+      // Otherwise pick up where the last session left off (#7). Every path in
+      // it has already been checked to still exist.
+      const lastSession = session.restore();
+      if (lastSession.length) {
+        // Queued like any other open, so the windows come back in order rather
+        // than racing each other for focus.
+        lastSession.forEach((snapshot) => {
+          openQueue = openQueue
+            .then(() => openWindowWithPaths(snapshot))
+            .catch((e) => console.error(e));
+        });
+        // If every file turned out to be unreadable there would be no window
+        // at all, which looks like a failed launch.
+        openQueue = openQueue.then(() => {
+          if (!windows.length) createWindow({});
+        });
+      } else {
+        createWindow({});
+      }
+    }
   }
 });
 
@@ -287,6 +390,9 @@ app.on("ready", async () => {
 // The quit is vetoed outright while the dialogs are up, because Electron tears
 // windows down the moment before-quit returns.
 let quitConfirmed = false;
+// set once the session file has been written for a quit, so the individual
+// window closes that follow do not overwrite it with just the last one
+let quitting = false;
 app.on("before-quit", (event) => {
   if (quitConfirmed) return;
   const open = windows.filter((w) => w.bw && !w.bw.isDestroyed());
@@ -301,6 +407,12 @@ app.on("before-quit", (event) => {
       if (!ok) return; // Cancel anywhere cancels the whole quit
     }
     quitConfirmed = true;
+    // Everything still open at the moment of the quit is what comes back (#7),
+    // in window order. The per-window snapshots arrived with the answers above,
+    // so this is what each window held before anything was torn down.
+    quitting = true;
+    const snapshots = open.map((w) => w.bw.__session).filter((snap) => snap && snap.paths && snap.paths.length);
+    if (snapshots.length) session.save(snapshots);
     open.forEach((w) => {
       if (!w.bw.isDestroyed()) w.bw.__forceClose = true;
     });
@@ -445,10 +557,14 @@ function askRendererToClose(bw) {
   });
 }
 
-ipcMain.handle("ove_closeDecision", (event, { token, ok }) => {
+ipcMain.handle("ove_closeDecision", (event, { token, ok, session: snapshot }) => {
   const resolve = pendingCloses.get(token);
   if (!resolve) return;
   pendingCloses.delete(token);
+  // the last thing this window knew about itself, for #7: kept on the window
+  // so both the session file and Reopen Last Closed Window can use it
+  const bw = BrowserWindow.fromWebContents(event.sender);
+  if (bw && !bw.isDestroyed() && snapshot) bw.__session = snapshot;
   resolve(!!ok);
 });
 

@@ -8,7 +8,13 @@ const recentFiles = require("./recentFiles");
 const sequenceFileFilters = require("./sequenceFileFilters");
 const path = require("path");
 
-module.exports = function createMenu({ createWindow, getSeqJsonFromPath, openPath }) {
+module.exports = function createMenu({
+  createWindow,
+  getSeqJsonFromPath,
+  openPath,
+  reopenLastClosedWindow,
+  canReopenClosedWindow,
+}) {
   const recent = recentFiles.list();
   // Two files can share a basename, so show the parent folder to tell them apart.
   const labelFor = (p) => {
@@ -25,7 +31,7 @@ module.exports = function createMenu({ createWindow, getSeqJsonFromPath, openPat
           click: () => openPath(p),
         })),
         { type: "separator" },
-        { label: "Clear Menu", click: () => { recentFiles.clear(); createMenu({ createWindow, getSeqJsonFromPath, openPath }); } },
+        { label: "Clear Menu", click: () => { recentFiles.clear(); createMenu({ createWindow, getSeqJsonFromPath, openPath, reopenLastClosedWindow, canReopenClosedWindow }); } },
       ]
     : [{ label: "No Recent Files", enabled: false }];
 
@@ -80,6 +86,16 @@ module.exports = function createMenu({ createWindow, getSeqJsonFromPath, openPat
           },
         },
         { label: "Open Recent", submenu: openRecentSubmenu },
+        {
+          // Undoing a misclick on a window's close button (#7). Kept in memory
+          // for this session only, several deep, so closing two windows in a
+          // row and wanting both back works.
+          label: "Reopen Last Closed Window",
+          accelerator: "CmdOrCtrl+Shift+T",
+          enabled: !!(canReopenClosedWindow && canReopenClosedWindow()),
+          click: () => reopenLastClosedWindow && reopenLastClosedWindow(),
+        },
+        { type: "separator" },
         isMac ? { role: "close" } : { role: "quit" },
       ],
     },

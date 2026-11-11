@@ -52,6 +52,15 @@ Owczarzy (2008) salt correction, and match Biopython's `Tm_NN` to within 0.001 �
 - **Per-feature colours** — a colour row in the Add/Edit Feature dialog, saved as a
   `/color=` qualifier so it survives a round trip through `.gb` and opens correctly elsewhere
 - **File → Open Recent** — last 10 files, ⌘1–⌘9, auto-pruned
+- **The files you had open come back next launch**
+  ([`src/main_utils/session.js`](src/main_utils/session.js)) — close the app with the
+  vector, the insert and the donor on one strip and they are there again, in the same
+  order, with the same tab in front. Several windows come back as several windows. Opening
+  a `.gb` by double-clicking it still opens just that file. Files that moved or were
+  deleted in the meantime are skipped without a word, and a sequence that was never saved
+  is not restored — there is no file to restore it from. **File → Reopen Last Closed
+  Window** (⇧⌘T) undoes a misclick on a window's close button, up to ten deep, for the
+  session you are in.
 - **Unsaved changes are not thrown away silently**
   ([`src/tabs/unsaved.js`](src/tabs/unsaved.js)) — a tab with unsaved work shows a filled
   dot where its close button is, so you can see which of six tabs still needs saving before
@@ -199,6 +208,7 @@ keyboard ones are handled by this app's own Edit menu:
 | Save asked where to put the file every time | even for a sequence opened from a file a moment earlier, so saving a construct repeatedly meant re-confirming the same path; Save now overwrites the file the tab came from and Save As is the one that asks |
 | Save As left the tab editing the old file | renaming a construct through Save As wrote the copy and then quietly went on overwriting its previous name on the next Save; the tab now belongs to the file it was last written to |
 | closing a tab or window discarded unsaved work without a word | no dirty flag existed anywhere, and a sequence built in the Cloning tools lives only in its tab; closing now asks, and the tab strip shows which tabs are unsaved |
+| nothing was remembered about what was open | `electron-window-state` restored the window's geometry but not its contents, so a cloning session of four files had to be rebuilt by hand through Open Recent every morning |
 | a cancelled save still marked the sequence saved | OVE stamps its `lastSavedId` from a `.then()` that runs whether or not a file was written, so the save icon went quiet after you cancelled the dialog; the unsaved-changes guard keeps its own record per tab |
 
 ## Installing the app

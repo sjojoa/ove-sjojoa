@@ -15,6 +15,8 @@ const INBOUND = [
   "ove_warn",
   // the window or the app is closing: ask about unsaved tabs first (#8)
   "ove_requestClose",
+  // a restored window bringing its last-active tab back to the front (#7)
+  "ove_activateTab",
 ];
 
 contextBridge.exposeInMainWorld("api", {
