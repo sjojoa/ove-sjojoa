@@ -56,9 +56,12 @@ Owczarzy (2008) salt correction, and match Biopython's `Tm_NN` to within 0.001 �
   ([`src/main_utils/session.js`](src/main_utils/session.js)) — close the app with the
   vector, the insert and the donor on one strip and they are there again, in the same
   order, with the same tab in front. Several windows come back as several windows. Opening
-  a `.gb` by double-clicking it still opens just that file. Files that moved or were
-  deleted in the meantime are skipped without a word, and a sequence that was never saved
-  is not restored — there is no file to restore it from. **File → Reopen Last Closed
+  a `.gb` by double-clicking it adds that file to them and brings it to the front, rather
+  than replacing them — asking for one sequence is not a request to throw away the four you
+  had — and a file that is already open is brought forward instead of opened twice. Close
+  every tab before quitting and nothing is restored: that was a deliberate clear-out. Files
+  that moved or were deleted in the meantime are skipped without a word, and a sequence
+  that was never saved is not restored — there is no file to restore it from. **File → Reopen Last Closed
   Window** (⇧⌘T) undoes a misclick on a window's close button, up to ten deep, for the
   session you are in.
 - **Unsaved changes are not thrown away silently**

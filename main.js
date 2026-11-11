@@ -53,18 +53,20 @@ const rebuildMenu = () =>
 // window yet and creating its own. Queuing means the first makes the window and
 // the rest become tabs in it.
 let openQueue = Promise.resolve();
-function openPath(filePath) {
-  openQueue = openQueue.then(() => openPathNow(filePath)).catch((e) => console.error(e));
+function openPath(filePath, preferWindow) {
+  openQueue = openQueue
+    .then(() => openPathNow(filePath, preferWindow))
+    .catch((e) => console.error(e));
   return openQueue;
 }
 
-async function openPathNow(filePath) {
+async function openPathNow(filePath, preferWindow) {
   try {
     const initialSeqJson = await getSeqJsonFromPath(filePath);
     if (!initialSeqJson || !initialSeqJson.sequence) {
       throw new Error("no sequence could be read from this file");
     }
-    await openInTabOrWindow({ seqJson: initialSeqJson, filePath });
+    await openInTabOrWindow({ seqJson: initialSeqJson, filePath, preferWindow });
     noteRecentFile(filePath);
   } catch (error) {
     console.error(`could not open ${filePath}:`, error);
@@ -268,7 +270,9 @@ console.log(`initialSeqJson:`,initialSeqJson)
     // On macOS the app lives on with no windows, so waiting for the quit would
     // mean saving nothing. A window closed while others remain is not the end
     // of anything, and a quit writes the whole set itself.
-    if (!quitting && !windows.length && snapshot) session.save([snapshot]);
+    // An emptied window saves an empty session rather than leaving the old one
+    // in place: closing every tab and quitting means starting clean next time.
+    if (!quitting && !windows.length && snapshot) session.save(snapshot.paths.length ? [snapshot] : []);
     newWindow = null;
   });
 
@@ -299,7 +303,56 @@ async function openWindowWithPaths({ paths, activePath }) {
   if (target && activePath && activePath !== paths[0]) {
     sendWhenReady(target, "ove_activateTab", { filePath: activePath });
   }
+  if (target) target.__sessionPaths = paths;
   return target;
+}
+
+// Launch. A file named on the command line (or double-clicked) is added to
+// last session's windows rather than replacing them (#7) -- opening one
+// sequence is not a request to throw away the four you had. If it is already
+// one of the restored tabs, that tab is brought to the front instead of being
+// opened a second time. With nothing to restore -- a first run, or a session
+// that ended with every tab closed -- a named file is all there is.
+async function startUp(startupPaths) {
+  const lastSession = session.restore();
+  let lastWindow = null;
+  const restored = new Map();
+
+  for (const snapshot of lastSession) {
+    // eslint-disable-next-line no-await-in-loop
+    const win = await openWindowWithPaths(snapshot).catch((e) => {
+      console.error(e);
+      return null;
+    });
+    if (!win) continue;
+    lastWindow = win;
+    snapshot.paths.forEach((p) => restored.set(p, win));
+  }
+
+  // The file the user actually asked for is the one to be looking at, so it
+  // wins over the tab that was in front last time.
+  let bringForward = null;
+  for (const given of startupPaths) {
+    const resolved = path.resolve(given);
+    const already = restored.get(resolved);
+    if (already && !already.isDestroyed()) {
+      already.show();
+      already.focus();
+      bringForward = { win: already, filePath: resolved };
+      continue;
+    }
+    const into = lastWindow && !lastWindow.isDestroyed() ? lastWindow : undefined;
+    // eslint-disable-next-line no-await-in-loop
+    await openPathNow(given, into);
+    if (into) bringForward = { win: into, filePath: resolved };
+  }
+  if (bringForward) {
+    sendWhenReady(bringForward.win, "ove_activateTab", { filePath: bringForward.filePath });
+  }
+
+  // Every file unreadable and nothing restored would leave no window at all,
+  // which looks like a failed launch.
+  if (!windows.length) await createWindow({});
 }
 
 // Like sendTab, but for any message a freshly created window cannot receive
@@ -358,31 +411,9 @@ app.on("ready", async () => {
     const startupPaths = process.argv
       .slice(1)
       .filter((a) => a && a !== "." && !a.startsWith("-") && fs.existsSync(a) && fs.statSync(a).isFile());
-    if (startupPaths.length) {
-      // Double-clicking a .gb opens that file and nothing else: asked for one
-      // sequence, get one sequence.
-      startupPaths.forEach((p) => openPath(p));
-    } else {
-      // Otherwise pick up where the last session left off (#7). Every path in
-      // it has already been checked to still exist.
-      const lastSession = session.restore();
-      if (lastSession.length) {
-        // Queued like any other open, so the windows come back in order rather
-        // than racing each other for focus.
-        lastSession.forEach((snapshot) => {
-          openQueue = openQueue
-            .then(() => openWindowWithPaths(snapshot))
-            .catch((e) => console.error(e));
-        });
-        // If every file turned out to be unreadable there would be no window
-        // at all, which looks like a failed launch.
-        openQueue = openQueue.then(() => {
-          if (!windows.length) createWindow({});
-        });
-      } else {
-        createWindow({});
-      }
-    }
+    // Queued like any other open, so last session's windows come back in order
+    // rather than racing each other for focus.
+    openQueue = openQueue.then(() => startUp(startupPaths)).catch((e) => console.error(e));
   }
 });
 
@@ -528,6 +559,11 @@ ipcMain.handle("ove_closeThisWindow", (event) => {
   // the renderer only sends this once its last tab has been closed, which
   // means the unsaved-changes guard has already run for every tab in it
   if (w && !w.isDestroyed()) {
+    // It closed because the user emptied it, so there is nothing to reopen it
+    // with (#7). Recording that explicitly matters: without it the window
+    // would close having said nothing about itself, and last session's tabs
+    // would come back even though the user had deliberately closed them all.
+    w.__session = { paths: [], activePath: undefined };
     w.__forceClose = true;
     w.close();
   }
