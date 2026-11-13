@@ -7,7 +7,15 @@ const { ipcRenderer, contextBridge } = require("electron");
 
 // Adds an object 'api' to the global window object:
 // Channels the main process is allowed to push to this window (tab moves).
-const INBOUND = ["ove_addTab", "ove_closeTab", "ove_selectAll", "ove_find", "ove_warn"];
+const INBOUND = [
+  "ove_addTab",
+  "ove_closeTab",
+  "ove_selectAll",
+  "ove_find",
+  "ove_warn",
+  // the window or the app is closing: ask about unsaved tabs first (#8)
+  "ove_requestClose",
+];
 
 contextBridge.exposeInMainWorld("api", {
   send: async (type, arg) => {

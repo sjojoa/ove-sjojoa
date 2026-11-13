@@ -143,3 +143,22 @@ body.ove-has-tabs .veVersionHistoryViewContainer {
 body.ove-has-tabs .veVersionHistoryViewContainer > .veVersionHistoryView {
   height: 100% !important;
 }
+
+/* Unsaved changes (#8): a filled dot where the close button is, so you can see
+   which tabs still need saving before clicking anything. Hovering the tab
+   turns it back into a x, so closing is still one click. */
+.ove-tab-dirty .ove-tab-close {
+  font-size: 0;
+  opacity: 0.9;
+}
+.ove-tab-dirty .ove-tab-close::before {
+  content: "\2022";
+  font-size: 20px;
+  line-height: 15px;
+}
+.ove-tab-dirty:hover .ove-tab-close {
+  font-size: 15px;
+}
+.ove-tab-dirty:hover .ove-tab-close::before {
+  content: none;
+}

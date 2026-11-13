@@ -218,6 +218,20 @@ console.log(`initialSeqJson:`,initialSeqJson)
   // Open the DevTools.
   // newWindow.webContents.openDevTools()
 
+  // Unsaved changes (#8): hold the close while the renderer asks about each
+  // dirty tab. __forceClose is set once that has happened (or by the renderer
+  // closing its own last tab), so the second close goes straight through.
+  newWindow.on("close", function (event) {
+    if (newWindow.__forceClose) return;
+    event.preventDefault();
+    const bw = newWindow;
+    askRendererToClose(bw).then((ok) => {
+      if (!ok || bw.isDestroyed()) return;
+      bw.__forceClose = true;
+      bw.close();
+    });
+  });
+
   // Emitted when the window is closed.
   newWindow.on("closed", function () {
     // Dereference the window object, usually you would store windows
@@ -269,6 +283,31 @@ app.on("ready", async () => {
   }
 });
 
+// Cmd+Q, the Quit menu item, and a logout: same guard, every window in turn.
+// The quit is vetoed outright while the dialogs are up, because Electron tears
+// windows down the moment before-quit returns.
+let quitConfirmed = false;
+app.on("before-quit", (event) => {
+  if (quitConfirmed) return;
+  const open = windows.filter((w) => w.bw && !w.bw.isDestroyed());
+  if (!open.length) return;
+  event.preventDefault();
+  (async () => {
+    for (const w of open) {
+      if (w.bw.isDestroyed()) continue;
+      w.bw.focus();
+      // eslint-disable-next-line no-await-in-loop
+      const ok = await askRendererToClose(w.bw);
+      if (!ok) return; // Cancel anywhere cancels the whole quit
+    }
+    quitConfirmed = true;
+    open.forEach((w) => {
+      if (!w.bw.isDestroyed()) w.bw.__forceClose = true;
+    });
+    app.quit();
+  })();
+});
+
 // Quit when all windows are closed.
 app.on("window-all-closed", function () {
   // On macOS it is common for applications and their menu bar
@@ -295,7 +334,7 @@ app.on("activate", function () {
 
 ipcMain.handle(
   "ove_saveFile",
-  (event, { sequenceDataToSave, filePath, isSaveAs }) => {
+  (event, { sequenceDataToSave, filePath }) => {
     const browserWindow = BrowserWindow.fromWebContents(event.sender);
 
     const ext = path.extname(filePath);
@@ -325,13 +364,14 @@ ipcMain.handle(
     }
     fs.writeFileSync(filePath, formattedSeqString);
     noteRecentFile(filePath);
-    !isSaveAs &&
-      windows.forEach((w) => {
-        if (w.bw === browserWindow) {
-          //update the __filePath prop we're saving on the window to prevent opening the same file twice
-          w.__filePath = filePath;
-        }
-      });
+    // Save and Save As both retarget the tab, so the window's record of which
+    // file it is showing follows either way.
+    windows.forEach((w) => {
+      if (w.bw === browserWindow) {
+        //update the __filePath prop we're saving on the window to prevent opening the same file twice
+        w.__filePath = filePath;
+      }
+    });
   }
 );
 
@@ -373,7 +413,62 @@ ipcMain.handle("ove_tabDropped", (event, { screenX, screenY, payload, isOnlyTab 
 
 ipcMain.handle("ove_closeThisWindow", (event) => {
   const w = BrowserWindow.fromWebContents(event.sender);
-  if (w && !w.isDestroyed()) w.close();
+  // the renderer only sends this once its last tab has been closed, which
+  // means the unsaved-changes guard has already run for every tab in it
+  if (w && !w.isDestroyed()) {
+    w.__forceClose = true;
+    w.close();
+  }
+});
+
+// ------------------------------------------- unsaved changes on close (#8)
+//
+// A window's close button and Cmd+Q are main-process events, and the dirty
+// flag lives in the renderer, so main vetoes its own close and asks. The
+// renderer walks its tabs, puts up one dialog at a time, and answers once.
+const pendingCloses = new Map();
+let closeToken = 0;
+
+function askRendererToClose(bw) {
+  if (!bw || bw.isDestroyed() || !bw.webContents || bw.webContents.isDestroyed()) {
+    return Promise.resolve(true);
+  }
+  const token = `close${++closeToken}`;
+  return new Promise((resolve) => {
+    pendingCloses.set(token, resolve);
+    bw.webContents.send("ove_requestClose", { token });
+    // A renderer that never answers must not wedge the app shut. Two minutes
+    // is far longer than any dialog and far shorter than "never".
+    setTimeout(() => {
+      if (pendingCloses.delete(token)) resolve(true);
+    }, 120000);
+  });
+}
+
+ipcMain.handle("ove_closeDecision", (event, { token, ok }) => {
+  const resolve = pendingCloses.get(token);
+  if (!resolve) return;
+  pendingCloses.delete(token);
+  resolve(!!ok);
+});
+
+// Save / Save As / Cancel / Don't Save, asked by the main process so the same
+// dialog appears whether the close started at a tab's x or at the window's.
+// Save overwrites the file the tab came from; Save As asks where to put it,
+// which is the way to rename it or move it somewhere else.
+ipcMain.handle("ove_confirmClose", async (event, { name, hasFile }) => {
+  const bw = BrowserWindow.fromWebContents(event.sender);
+  const { response } = await dialog.showMessageBox(bw, {
+    type: "warning",
+    buttons: ["Save", "Save As\u2026", "Cancel", "Don't Save"],
+    defaultId: 0,
+    cancelId: 2,
+    message: `Do you want to save the changes you made to "${name}"?`,
+    detail: hasFile
+      ? "Save overwrites the file this came from. Save As puts it somewhere else, under any name you like. Your changes will be lost if you don't save them."
+      : "This sequence has never been saved to a file, so both Save and Save As will ask where to put it. It will be lost for good if you don't save it.",
+  });
+  return ["save", "saveAs", "cancel", "discard"][response] || "cancel";
 });
 
 ipcMain.handle("ove_focusThisWindow", (event) => {

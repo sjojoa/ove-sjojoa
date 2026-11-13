@@ -189,6 +189,18 @@ const patches = [
     to: "  Object(react[\"useEffect\"])(function () {\n    EditCaretPosition.restoreSelection(inputRef.current, caretPosition);\n    // eslint-disable-next-line react-hooks/exhaustive-deps\n  }, [bases]);\n  Object(react[\"useEffect\"])(function () {\n    var el = inputRef.current;\n    // only while this field is the one being typed in: otherwise clicking a\n    // binding site in the list below would pull the caret up here\n    if (el && (el === document.activeElement || el.contains(document.activeElement))) {\n      EditCaretPosition.restoreSelection(el, caretPosition);\n    }\n    // eslint-disable-next-line react-hooks/exhaustive-deps\n  }, [start, end, forward]);",
   },
   {
+    // Backspace/Delete on a clicked annotation deleted the SEQUENCE under it
+    // (#9): the binding only ever saw caretPosition and selectionLayer, and
+    // clicking an annotation sets the selection to its range. `this.props`
+    // here carries selectedAnnotations and the deleteFeature/Part/Primer
+    // actions, so the fork's handler has everything it needs; it returns
+    // false whenever the keystroke is not an annotation delete, and the
+    // original sequence delete runs as before.
+    name: "backspace on a selected annotation deletes the annotation",
+    from: "      this.combokeys.bind([\"backspace\", \"del\"], function (event) {\n        // Handle shortcut\n        _this2.handleDnaDelete(event);\n      });",
+    to: "      this.combokeys.bind([\"backspace\", \"del\"], function (event) {\n        // ove: an annotation selected by clicking is deleted as an annotation\n        if (window.oveDeleteAnnotation && window.oveDeleteAnnotation.handle(_this2.props, event)) return;\n        // Handle shortcut\n        _this2.handleDnaDelete(event);\n      });",
+  },
+  {
     name: "alignment tool note reflects the built-in local aligner",
     from: "Note: This tool requires an alignment server to be hooked up for it to work properly. It will NOT work in the OVE demo page.",
     to: "Alignments run locally on this computer (no server needed). Tip: add .ab1 files, tick \\\"Align Sequencing Reads to Reference Sequence\\\" and optionally \\\"Auto-Trim\\\".",
