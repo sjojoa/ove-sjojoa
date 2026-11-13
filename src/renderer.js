@@ -7,11 +7,22 @@ const ORIGINAL_TITLE = document.title;
 // added, File > Import Sequence is pointed at our own paste dialog, and
 // tagged text joins the Export Sequence submenu.
 const MENU_FILTER = (menu) =>
-  window.oveMenuLabels.menuFilter(
-    window.oveTaggedExport.menuFilter(
-      window.oveImport.menuFilter(window.oveCloning.menuFilter(menu))
+  window.oveFileMenu.menuFilter(
+    window.oveMenuLabels.menuFilter(
+      window.oveTaggedExport.menuFilter(
+        window.oveImport.menuFilter(window.oveCloning.menuFilter(menu))
+      )
     )
   );
+
+// The File menu's recent-file list changes while the app is running (#21).
+// fileMenu.js bumps the version the patched menu cache is keyed on; the menu
+// bar still has to render for that to be noticed, and nothing in the editor's
+// own state changed, so nudge it.
+window.oveFileMenu.onChange(() => {
+  const doc = window.oveTabs && window.oveTabs.getActive();
+  if (doc && doc.editor) doc.editor.updateEditor({});
+});
 
 // Same idea for the right-click menus, which OVE passes through their own hook.
 const RIGHT_CLICK_OVERRIDES = Object.assign(

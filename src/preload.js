@@ -17,6 +17,9 @@ const INBOUND = [
   "ove_requestClose",
   // a restored window bringing its last-active tab back to the front (#7)
   "ove_activateTab",
+  // the recent-file list and whether a closed window can be reopened, for the
+  // editor window's own File menu (#21)
+  "ove_menuState",
 ];
 
 contextBridge.exposeInMainWorld("api", {

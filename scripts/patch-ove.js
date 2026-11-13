@@ -201,6 +201,20 @@ const patches = [
     to: "      this.combokeys.bind([\"backspace\", \"del\"], function (event) {\n        // ove: an annotation selected by clicking is deleted as an annotation\n        if (window.oveDeleteAnnotation && window.oveDeleteAnnotation.handle(_this2.props, event)) return;\n        // Handle shortcut\n        _this2.handleDnaDelete(event);\n      });",
   },
   {
+    // The editor's File menu gained items whose contents change while the app
+    // runs -- the recent-file list, and whether there is a closed window to
+    // reopen (#21). getFilteredMenu memoizes on the filter function itself, so
+    // a filter that keeps its identity is called exactly once and its answer
+    // is kept for the life of the editor; handing over a new function instead
+    // does not help, because menuFilter is a creation-time prop that
+    // updateEditor does not propagate. Key the cache on a version the app
+    // bumps instead: the menu is rebuilt when it has actually changed, and not
+    // on every render.
+    name: "the editor menu can be rebuilt when its contents change",
+    from: "      return menuFilter(menuDef);\n    }));",
+    to: "      return menuFilter(menuDef);\n    }, function () {\n      // ove: see scripts/patch-ove.js -- the File menu's contents change\n      return window.oveMenuVersion || 0;\n    }));",
+  },
+  {
     name: "alignment tool note reflects the built-in local aligner",
     from: "Note: This tool requires an alignment server to be hooked up for it to work properly. It will NOT work in the OVE demo page.",
     to: "Alignments run locally on this computer (no server needed). Tip: add .ab1 files, tick \\\"Align Sequencing Reads to Reference Sequence\\\" and optionally \\\"Auto-Trim\\\".",
