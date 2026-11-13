@@ -36,7 +36,7 @@ const featureTypeColor = (type) => {
   }
 };
 
-const rebuildMenu = () =>
+const rebuildMenu = () => {
   createMenu({
     windows,
     createWindow,
@@ -45,6 +45,26 @@ const rebuildMenu = () =>
     reopenLastClosedWindow: () => reopenLastClosedWindow(),
     canReopenClosedWindow: () => canReopenClosedWindow(),
   });
+  // The editor window has its own File menu, built in the renderer, which
+  // carries the same items (#21). It cannot wait on IPC while rendering, so
+  // the state those items need is pushed to it here -- the one place that
+  // already runs whenever the recent list or the closed-window stack changes.
+  pushMenuState();
+};
+
+function menuState() {
+  return {
+    recent: recentFiles.list(),
+    canReopenClosedWindow: canReopenClosedWindow(),
+  };
+}
+
+function pushMenuState() {
+  const state = menuState();
+  BrowserWindow.getAllWindows().forEach((w) => {
+    if (!w.isDestroyed() && w.__oveReady) w.webContents.send("ove_menuState", state);
+  });
+}
 
 // Open a file by path: used by File > Open, File > Open Recent and the Dock's
 // recent documents. Records it in the recent list and refreshes the menu.
@@ -118,6 +138,7 @@ ipcMain.handle("ove_rendererReady", (event) => {
   const messages = win.__ovePendingMessages || [];
   win.__ovePendingMessages = [];
   messages.forEach(({ channel, payload }) => win.webContents.send(channel, payload));
+  win.webContents.send("ove_menuState", menuState());
 });
 
 const pointInBounds = (b, x, y) =>
@@ -621,6 +642,42 @@ ipcMain.handle("ove_confirmClose", async (event, { name, hasFile }) => {
       : "This sequence has never been saved to a file, so both Save and Save As will ask where to put it. It will be lost for good if you don't save it.",
   });
   return ["save", "saveAs", "cancel", "discard"][response] || "cancel";
+});
+
+// ------------------------- the editor window's own File menu (#21)
+//
+// The same actions as the system menu bar's File menu, reachable from inside
+// the window. One implementation, two menus: these call straight into the
+// functions the system menu already uses, so the two cannot drift apart.
+
+ipcMain.handle("ove_menuNewFile", () => {
+  createWindow({ initialSeqJson: undefined });
+});
+
+ipcMain.handle("ove_menuOpen", async (event) => {
+  const { canceled, filePaths } = await dialog.showOpenDialog(
+    BrowserWindow.fromWebContents(event.sender),
+    {
+      filters: [{ name: "Sequence Files", extensions: sequenceFileFilters.EXTENSIONS }],
+      properties: ["openFile", "multiSelections"],
+    }
+  );
+  if (canceled) return 0;
+  filePaths.forEach((p) => openPath(p));
+  return filePaths.length;
+});
+
+ipcMain.handle("ove_menuOpenPath", (event, filePath) => {
+  if (typeof filePath === "string" && filePath) openPath(filePath);
+});
+
+ipcMain.handle("ove_menuReopenLastClosedWindow", () => {
+  reopenLastClosedWindow();
+});
+
+ipcMain.handle("ove_menuClearRecent", () => {
+  recentFiles.clear();
+  rebuildMenu();
 });
 
 ipcMain.handle("ove_focusThisWindow", (event) => {

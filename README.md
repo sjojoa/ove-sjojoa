@@ -52,6 +52,11 @@ Owczarzy (2008) salt correction, and match Biopython's `Tm_NN` to within 0.001 �
 - **Per-feature colours** — a colour row in the Add/Edit Feature dialog, saved as a
   `/color=` qualifier so it survives a round trip through `.gb` and opens correctly elsewhere
 - **File → Open Recent** — last 10 files, ⌘1–⌘9, auto-pruned
+- **One File menu, in both places**
+  ([`src/features/fileMenu.js`](src/features/fileMenu.js)) — New File, Open…, Open Recent
+  and Reopen Last Closed Window are in the editor window's own File menu as well as the
+  system menu bar, so the menu next to the sequence can open a file. Same actions, same
+  recent list, same shortcuts (shown as hints; the system menu still owns the keys).
 - **The files you had open come back next launch**
   ([`src/main_utils/session.js`](src/main_utils/session.js)) — close the app with the
   vector, the insert and the donor on one strip and they are there again, in the same
@@ -212,6 +217,8 @@ keyboard ones are handled by this app's own Edit menu:
 | Save As left the tab editing the old file | renaming a construct through Save As wrote the copy and then quietly went on overwriting its previous name on the next Save; the tab now belongs to the file it was last written to |
 | closing a tab or window discarded unsaved work without a word | no dirty flag existed anywhere, and a sequence built in the Cloning tools lives only in its tab; closing now asks, and the tab strip shows which tabs are unsaved |
 | nothing was remembered about what was open | `electron-window-state` restored the window's geometry but not its contents, so a cloning session of four files had to be rebuilt by hand through Open Recent every morning |
+| the editor window's File menu could not open a file | it held only the items that act on the sequence in front of you; opening anything else meant going up to the system menu bar, which on a large display is a long way from where you are working |
+| the editor menu was computed once and cached forever | `getFilteredMenu` memoizes on the identity of the filter function, so a menu whose contents change while the app runs could never show them — and handing over a new function does not help, since `menuFilter` is a creation-time prop `updateEditor` ignores |
 | a cancelled save still marked the sequence saved | OVE stamps its `lastSavedId` from a `.then()` that runs whether or not a file was written, so the save icon went quiet after you cancelled the dialog; the unsaved-changes guard keeps its own record per tab |
 
 ## Installing the app
