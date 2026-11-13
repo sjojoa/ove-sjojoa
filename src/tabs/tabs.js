@@ -243,6 +243,17 @@
     renderStrip();
   }
 
+  // What this window should reopen as next time (#7): its file-backed tabs, in
+  // strip order, and which one was in front. Tabs with no file are left out —
+  // there is nothing to reopen them from.
+  function sessionSnapshot() {
+    const active = getActive();
+    return {
+      paths: docs.filter((d) => d.filePath).map((d) => d.filePath),
+      activePath: active && active.filePath,
+    };
+  }
+
   // everything another window needs to re-create this tab
   function serialize(doc) {
     const sd = doc.editor ? doc.editor.getState().sequenceData : doc.seqJson;
@@ -426,22 +437,41 @@
     // Only sent when a tab has been *moved* to another window, so the sequence
     // is not being discarded and the unsaved-changes guard would be wrong here.
     window.api.on("ove_closeTab", ({ docId }) => forceCloseDoc(docId));
+    // Restoring a window puts its tabs back one at a time; this brings the one
+    // that was in front back to the front once they have all arrived (#7).
+    window.api.on("ove_activateTab", ({ filePath }) => {
+      const doc = docs.find((d) => d.filePath === filePath);
+      if (doc) activate(doc.id);
+    });
     // The window (or the whole app) is closing. Main vetoes its own close
     // event and waits for this answer, so the dialog is up before anything is
     // thrown away. Tabs are asked about one at a time, in strip order, and
     // the first Cancel stops the whole thing.
     window.api.on("ove_requestClose", async ({ token }) => {
+      // Taken first, before anything is asked or shown: walking the tabs
+      // changes which one is in front, and what should come back next time is
+      // what was in front when the user reached for the close button (#7).
+      const snapshot = sessionSnapshot();
+      const wasActive = activeId;
       let ok = true;
       for (const doc of [...docs]) {
         if (!window.oveUnsaved) break;
-        activate(doc.id); // show what is being asked about
+        // only bring a tab forward if it is about to be asked about -- there
+        // is no reason to flick through the clean ones
+        if (window.oveUnsaved.isDirty(doc)) activate(doc.id);
         // eslint-disable-next-line no-await-in-loop
         if (!(await window.oveUnsaved.confirmClose(doc, window.oveSaveDoc))) {
           ok = false;
           break;
         }
       }
-      window.api.send("ove_closeDecision", { token, ok });
+      // nothing is closing after all, so put the user back where they were
+      if (!ok && wasActive && docById(wasActive)) activate(wasActive);
+      window.api.send("ove_closeDecision", {
+        token,
+        ok,
+        session: ok ? snapshot : undefined,
+      });
     });
     window.api.on("ove_selectAll", selectAll);
     window.api.on("ove_find", focusFind);
@@ -462,6 +492,7 @@
     closeDoc,
     forceCloseDoc,
     renameDoc,
+    sessionSnapshot,
     activate,
     getActive,
     serialize,
