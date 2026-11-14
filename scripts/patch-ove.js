@@ -250,6 +250,16 @@ const patches = [
     to: "  charWN = Math.min(arrowPointiness * charWN, width);",
   },
   {
+    // New Feature is mod+k and New Part is mod+l upstream; New Primer, the
+    // one of the three this fork is built around, had no key at all. mod+j
+    // sits next to them on the keyboard, so the three annotations you can
+    // create are j-k-l in a row, and it is one of the few combinations the
+    // editor, this app's menus and the browser all leave alone (#24).
+    name: "cmd+j creates a primer, next to cmd+k and cmd+l",
+    from: "  newPrimer: {\n    handler: function handler(props) {\n      return props.handleNewPrimer();\n    },",
+    to: "  newPrimer: {\n    hotkey: \"mod+j\",\n    hotkeyProps: {\n      preventDefault: true\n    },\n    handler: function handler(props) {\n      return props.handleNewPrimer();\n    },",
+  },
+  {
     name: "alignment tool note reflects the built-in local aligner",
     from: "Note: This tool requires an alignment server to be hooked up for it to work properly. It will NOT work in the OVE demo page.",
     to: "Alignments run locally on this computer (no server needed). Tip: add .ab1 files, tick \\\"Align Sequencing Reads to Reference Sequence\\\" and optionally \\\"Auto-Trim\\\".",
