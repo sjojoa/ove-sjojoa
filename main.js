@@ -20,6 +20,8 @@ const closedWindows = [];
 const REOPEN_DEPTH = 10;
 const recentFiles = require("./src/main_utils/recentFiles");
 const session = require("./src/main_utils/session");
+const history = require("./src/main_utils/history.js");
+const os = require("os");
 const taggedText = require("./src/features/taggedText");
 const pastedBases = require("./src/features/pastedBases");
 const sequenceFileFilters = require("./src/main_utils/sequenceFileFilters");
@@ -44,6 +46,7 @@ const rebuildMenu = () => {
     openPath,
     reopenLastClosedWindow: () => reopenLastClosedWindow(),
     canReopenClosedWindow: () => canReopenClosedWindow(),
+    askWindowForHistory: (opts) => askWindowForHistory(opts),
   });
   // The editor window has its own File menu, built in the renderer, which
   // carries the same items (#21). It cannot wait on IPC while rendering, so
@@ -172,7 +175,9 @@ async function getSeqJsonFromPath(_filePath) {
       return sequenceData;
     }
     const res = await bioParsers.anyToJson(data, { fileName });
-    return res[0].parsedSequence;
+    // The saved-version history rides along in a comment; the editor must
+    // never see it (#6).
+    return history.strip(res[0].parsedSequence);
   } catch (error) {
     console.error(`error:`, error);
     return {};
@@ -494,14 +499,118 @@ app.on("activate", function () {
 //   });
 // });
 
+/*  SAVED-VERSION HISTORY (#6)  */
+
+// The history lives in the file, so the file on disk is the only state there
+// is: read what is there now, add what we are about to write, hand it back to
+// be written with it. Nothing is cached between saves, so two windows editing
+// the same file cannot disagree about the history.
+function readHistoryFile(filePath) {
+  try {
+    if (path.extname(filePath) !== ".gb") return null;
+    const raw = fs.readFileSync(path.resolve(filePath), "utf8");
+    return bioParsers.genbankToJson(raw);
+  } catch (e) {
+    return null; // no file yet, or not readable: start a fresh history
+  }
+}
+
+async function historyOf(filePath) {
+  const parsed = await readHistoryFile(filePath);
+  if (!parsed || !parsed[0] || !parsed[0].parsedSequence) return [];
+  return history.read(parsed[0].parsedSequence);
+}
+
+// Rewrites the file with the history it already has, changed by `change`.
+// Used by trimming and clearing, which must not touch the sequence itself.
+async function rewriteHistory(filePath, change) {
+  const parsed = await readHistoryFile(filePath);
+  if (!parsed || !parsed[0] || !parsed[0].parsedSequence) return false;
+  const sequenceData = parsed[0].parsedSequence;
+  const next = change(history.read(sequenceData));
+  fs.writeFileSync(filePath, bioParsers.jsonToGenbank(history.write(sequenceData, next)));
+  return true;
+}
+
+// Saving is synchronous further down, and bio-parsers' genbank reader is not,
+// so the history for the file being saved is read ahead of the write and kept
+// just long enough to be used by it.
+const pendingHistory = new Map();
+
+function withHistory(filePath, sequenceDataToSave) {
+  const entries = pendingHistory.get(filePath) || [];
+  pendingHistory.delete(filePath);
+  return history.write(
+    sequenceDataToSave,
+    history.add(entries, sequenceDataToSave, { by: os.userInfo().username })
+  );
+}
+
+// Which file the history belongs to is whichever tab is in front, and only
+// the renderer knows that, so the menu item is a question rather than an
+// order: the window answers by calling ove_historyTrim with its own path.
+function askWindowForHistory(opts) {
+  const bw = BrowserWindow.getFocusedWindow() || (windows[0] && windows[0].bw);
+  if (bw) bw.webContents.send("ove_menuHistory", opts);
+}
+
+ipcMain.handle("ove_historyTrim", async (event, { filePath, keep } = {}) => {
+  if (!filePath) return { ok: false, reason: "This tab has not been saved to a file yet." };
+  if (path.extname(filePath) !== ".gb") {
+    return { ok: false, reason: "Only GenBank files carry a version history." };
+  }
+  const before = (await historyOf(filePath)).length;
+  if (!before) return { ok: false, reason: "This file has no saved version history." };
+  const browserWindow = BrowserWindow.fromWebContents(event.sender);
+  const losing = Math.max(0, before - (keep || 0));
+  const { response } = await dialog.showMessageBox(browserWindow, {
+    type: "warning",
+    buttons: [keep ? `Trim to ${keep}` : "Delete all", "Cancel"],
+    defaultId: 1,
+    cancelId: 1,
+    message: keep
+      ? `Discard ${losing} of ${before} saved versions?`
+      : `Delete all ${before} saved versions?`,
+    detail:
+      `${path.basename(filePath)} keeps its version history inside the file itself, so this ` +
+      `makes the file smaller and cannot be undone. The sequence in front of you is not ` +
+      `touched${keep ? ", and the most recent versions are kept" : ""}.`,
+  });
+  if (response !== 0) return { ok: false, cancelled: true };
+  await rewriteHistory(filePath, (entries) => history.trim(entries, keep || 0));
+  const after = (await historyOf(filePath)).length;
+  return { ok: true, before, after };
+});
+
+ipcMain.handle("ove_historyList", async (event, { filePath } = {}) => {
+  if (!filePath) return [];
+  return history.list(await historyOf(filePath));
+});
+
+ipcMain.handle("ove_historyAt", async (event, { filePath, versionId } = {}) => {
+  if (!filePath) return null;
+  return history.dataAt(await historyOf(filePath), versionId);
+});
+
 /*  HANDLE THE API CALLS FROM THE RENDERER PROCESS  */
 
 ipcMain.handle(
   "ove_saveFile",
-  (event, { sequenceDataToSave, filePath }) => {
+  async (event, { sequenceDataToSave, filePath, previousFilePath }) => {
     const browserWindow = BrowserWindow.fromWebContents(event.sender);
 
     const ext = path.extname(filePath);
+    // GenBank is the only format with somewhere to keep it (#6). Save As
+    // writes a new file with no history of its own, so the history follows
+    // the sequence from the file it came from: a construct renamed on its way
+    // to v2 keeps its lineage rather than starting over.
+    if (ext === ".gb" || ext === "") {
+      let entries = await historyOf(filePath);
+      if (!entries.length && previousFilePath && previousFilePath !== filePath) {
+        entries = await historyOf(previousFilePath);
+      }
+      pendingHistory.set(filePath, entries);
+    }
 
     let formattedSeqString;
     if (ext === ".fasta") {
@@ -524,7 +633,7 @@ ipcMain.handle(
           });
       }
     } else {
-      formattedSeqString = bioParsers.jsonToGenbank(sequenceDataToSave);
+      formattedSeqString = bioParsers.jsonToGenbank(withHistory(filePath, sequenceDataToSave));
     }
     fs.writeFileSync(filePath, formattedSeqString);
     noteRecentFile(filePath);

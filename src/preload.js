@@ -20,6 +20,9 @@ const INBOUND = [
   // the recent-file list and whether a closed window can be reopened, for the
   // editor window's own File menu (#21)
   "ove_menuState",
+  // File > Version History: the menu asking this window which file is in
+  // front, and what to do with its history (#6)
+  "ove_menuHistory",
 ];
 
 contextBridge.exposeInMainWorld("api", {
