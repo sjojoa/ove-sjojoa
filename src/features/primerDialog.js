@@ -37,11 +37,30 @@
     (p.annotationTypePlural === "primers" ||
       (p.initialValues && p.initialValues.type === "primer_bind"));
 
+  // A primer being created rather than edited, over a range of a single base.
+  // That is what OVE hands the dialog when there was no selection: it falls
+  // back to the caret, as `{ start: caret, end: caret }`. Seeding the Bases
+  // field from the template there would put one stray letter in the box --
+  // whichever base the caret happened to be sitting on -- which is not a
+  // primer and has to be deleted before anything can be typed or pasted.
+  //
+  // A deliberate one-base selection is indistinguishable from a bare caret
+  // here, and lands in the same place. That is fine: a 1 nt primer is not a
+  // primer either, so starting empty is the right answer for both.
+  function isNewEmptyRange() {
+    const init = (props && props.initialValues) || {};
+    if (init.id) return false;
+    const start = Number(init.start !== undefined ? init.start : props.start);
+    const end = Number(init.end !== undefined ? init.end : props.end);
+    return Number.isFinite(start) && start === end;
+  }
+
   // What the dialog starts from: the primer's own bases if it has any, else
   // the stretch of template it is sitting on, which is what its bases would be.
   function startingBases() {
     const bases = (props.bases || "").replace(/[^A-Za-z]/g, "");
     if (bases) return bases.toUpperCase();
+    if (isNewEmptyRange()) return "";
     const seq = template();
     const { forward } = props;
     // the dialog's start/end are 1-based
@@ -195,5 +214,14 @@
     return React.createElement("div", { className: "ove-ph-dialog-host", ref });
   }
 
-  window.ovePrimerDialog = { render, ref };
+  // isNewEmptyRange and startingBases are exposed for the unit tests.
+  window.ovePrimerDialog = {
+    render,
+    ref,
+    isNewEmptyRange,
+    startingBases,
+    _setProps: (p) => {
+      props = p;
+    },
+  };
 })();

@@ -219,6 +219,9 @@ keyboard ones are handled by this app's own Edit menu:
 | nothing was remembered about what was open | `electron-window-state` restored the window's geometry but not its contents, so a cloning session of four files had to be rebuilt by hand through Open Recent every morning |
 | the editor window's File menu could not open a file | it held only the items that act on the sequence in front of you; opening anything else meant going up to the system menu bar, which on a large display is a long way from where you are working |
 | the editor menu was computed once and cached forever | `getFilteredMenu` memoizes on the identity of the filter function, so a menu whose contents change while the app runs could never show them — and handing over a new function does not help, since `menuFilter` is a creation-time prop `updateEditor` ignores |
+| a primer created without a selection began with one stray base | the Bases field is seeded from the stretch of template the annotation covers, and with no selection that range is the caret — a single character, adopted by the form as the primer's real value, which had to be deleted before the oligo could be typed |
+| you could not see which way a primer pointed | primers drawn with their bases were given an arrowhead a fifth of a character wide, which at any normal zoom reads as a bevel rather than a point — the one thing a primer has to say at a glance |
+| an arrowhead could be longer than the annotation it points from | `arrowPointiness` scales the head without any cap, so a value above 1 puts the back of the arrow in front of its tip and draws a bowtie; nothing upstream passed one, so nothing upstream hit it |
 | a cancelled save still marked the sequence saved | OVE stamps its `lastSavedId` from a `.then()` that runs whether or not a file was written, so the save icon went quiet after you cancelled the dialog; the unsaved-changes guard keeps its own record per tab |
 
 ## Installing the app

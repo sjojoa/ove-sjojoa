@@ -215,6 +215,41 @@ const patches = [
     to: "      return menuFilter(menuDef);\n    }, function () {\n      // ove: see scripts/patch-ove.js -- the File menu's contents change\n      return window.oveMenuVersion || 0;\n    }));",
   },
   {
+    // When a primer has no bases of its own the dialog seeds the Bases field
+    // with the stretch of template the annotation covers, as the field's
+    // defaultValue -- so redux-form adopts it as the real value, not just as
+    // something on screen. For a primer made from a selection that is the
+    // point. For one made with no selection the range is a single base --
+    // OVE falls back to `{ start: caret, end: caret }` -- so the field opens
+    // holding whichever base the caret happened to be on, and that letter
+    // has to be deleted before the actual oligo can be typed or pasted. A
+    // one-base range is not a primer, so seed nothing and leave it empty.
+    name: "a primer created with no selection starts with an empty bases field",
+    from: "  if (!bases) {\n    var bps = getSequenceWithinRange(normalizedSelection, sequenceData.sequence);",
+    to: "  if (!bases && start !== end) {\n    var bps = getSequenceWithinRange(normalizedSelection, sequenceData.sequence);",
+  },
+  {
+    // Primers drawn with their bases got an arrowhead a fifth of a character
+    // wide, which at any normal zoom is a bevel rather than a point: the one
+    // thing a primer has to tell you at a glance is which way it reads, and
+    // it did not. 1.6 character widths is a head you can see without looking
+    // for it, and it is the same shape a feature already uses, only longer.
+    name: "primers point visibly in the row view",
+    from: "    }, annotation.bases && {\n      pointiness: 3,\n      arrowPointiness: 0.2\n    }, {",
+    to: "    }, annotation.bases && {\n      pointiness: 3,\n      arrowPointiness: 1.6\n    }, {",
+  },
+  {
+    // With arrowPointiness above 1 the head can be asked to be longer than
+    // the annotation itself, which puts the back of the arrow in front of its
+    // tip and draws a bowtie. Upstream never hit this because nothing passed
+    // a value above 1. Capping at the full width turns the worst case into a
+    // plain triangle, and is a no-op for every value <= 1, charWN already
+    // being at most the width.
+    name: "an arrowhead is never longer than the annotation it points from",
+    from: "  charWN = arrowPointiness * charWN;",
+    to: "  charWN = Math.min(arrowPointiness * charWN, width);",
+  },
+  {
     name: "alignment tool note reflects the built-in local aligner",
     from: "Note: This tool requires an alignment server to be hooked up for it to work properly. It will NOT work in the OVE demo page.",
     to: "Alignments run locally on this computer (no server needed). Tip: add .ab1 files, tick \\\"Align Sequencing Reads to Reference Sequence\\\" and optionally \\\"Auto-Trim\\\".",
