@@ -5,6 +5,9 @@
   const U = window.oveCloningUI;
   const D = window.dnaTools;
   const su = window.sequenceUtils;
+  // reading a construct back out of primers designed elsewhere (#20)
+  const F = window.oveFromPrimers;
+  const PH = window.ovePrimerHybridization;
   const { h } = U;
 
   let editor = null;
@@ -12,7 +15,16 @@
   const pickedFiles = [];
 
   // ------------------------------------------------------------ helpers
-  function current() {
+  // The sequence a tool works on. Normally the tab in front, but every tool
+  // can be pointed somewhere else -- another open tab, a pasted sequence, a
+  // file -- because the construct you are designing is not always the one you
+  // happen to be looking at (#20). An overridden template brings no selection
+  // or caret with it: those belong to the editor, not to the sequence.
+  function current(override) {
+    if (override) {
+      const seqData = su.tidyUpSequenceData(override, { annotationsAsObjects: false });
+      return { seqData, sel: null, caret: -1, name: seqData.name || "Untitled", overridden: true };
+    }
     const st = editor.getState();
     const seqData = su.tidyUpSequenceData(st.sequenceData, { annotationsAsObjects: false });
     const layer = st.selectionLayer || {};
@@ -31,6 +43,32 @@
     U.toast(`Opened "${seqData.name}" in a new tab`);
   }
 
+  // Opening a result as a tab is not the same as keeping it. A construct you
+  // have just designed usually wants to go next to the plasmids it came from,
+  // under a name you choose (#20).
+  async function saveSeqToFile(seqData, suggestedName) {
+    const name = (suggestedName || seqData.name || "construct").replace(/[/\\]/g, "_");
+    try {
+      const filePath = await window.api.send("ove_showSaveDialog", {
+        filters: [
+          { name: "Genbank", extensions: ["gb"] },
+          { name: "Fasta", extensions: ["fasta"] },
+          { name: "TeselaGen JSON", extensions: ["json"] },
+        ],
+        title: `${name}.gb`,
+        defaultPath: `~/Downloads/${name}.gb`,
+        buttonLabel: "Save construct",
+      });
+      if (!filePath) return false; // cancelled
+      await window.api.send("ove_saveFile", { filePath, sequenceDataToSave: plain(seqData) });
+      U.toast(`Saved "${filePath.slice(filePath.lastIndexOf("/") + 1)}"`, "success");
+      return true;
+    } catch (e) {
+      U.toast(`Could not save: ${e.message}`, "error");
+      return false;
+    }
+  }
+
   async function pickFiles(multi = false) {
     try {
       const seqs = ((await window.api.send("ove_pickSequenceFiles", { multi })) || []).map((s) => su.tidyUpSequenceData(s, { annotationsAsObjects: false }));
@@ -43,9 +81,31 @@
   }
 
   // all sequences the user can pick as inputs
+  // Everything a tool can be pointed at: the tab in front, the other tabs
+  // open in this window, anything built here this session, and any file
+  // opened from a picker (#20). Other tabs matter most -- an assembly's
+  // fragments are usually already open, which is why they were opened.
+  function otherTabs() {
+    const tabs = (window.oveTabs && window.oveTabs.docs) || [];
+    const active = window.oveTabs && window.oveTabs.getActive();
+    return tabs
+      .filter((d) => d !== active)
+      .map((d) => {
+        // a tab that is not in front has no live editor; its snapshot is kept
+        const sd = d.editor ? d.editor.getState().sequenceData : d.seqJson;
+        return sd && sd.sequence ? { name: `${d.name} (tab)`, seqData: su.tidyUpSequenceData(sd, { annotationsAsObjects: false }) } : null;
+      })
+      .filter(Boolean);
+  }
+
   function availableSequences() {
     const { seqData, name } = current();
-    return [{ name: `${name} (current tab)`, seqData }, ...session.map((s) => ({ name: `${s.name} (made this session)`, seqData: s.seqData })), ...pickedFiles.map((f) => ({ name: `${f.name} (file)`, seqData: f.seqData }))];
+    return [
+      { name: `${name} (current tab)`, seqData },
+      ...otherTabs(),
+      ...session.map((s) => ({ name: `${s.name} (made this session)`, seqData: s.seqData })),
+      ...pickedFiles.map((f) => ({ name: `${f.name} (file)`, seqData: f.seqData })),
+    ];
   }
 
   function conditionsEditor(initial = D.DEFAULT_CONDITIONS) {
@@ -153,8 +213,8 @@
     };
   }
 
-  function openPrimerDesigner() {
-    const { seqData, sel, name } = current();
+  function openPrimerDesigner({ template } = {}) {
+    const { seqData, sel, name } = current(template);
     const n = seqData.sequence.length;
     const from = U.numberInput(sel ? oneBased(sel.start) : 1, { min: 1, max: n, width: 90 });
     const to = U.numberInput(sel ? oneBased(sel.end) : Math.min(n, 1000), { min: 1, max: n, width: 90 });
@@ -265,12 +325,26 @@
         }),
         { icon: "document-open" }
       ),
+      U.button(
+        "Save PCR product…",
+        wrapTry(() => {
+          const p = needChosen();
+          const amp = D.sliceSeqData(seqData, p.productStart, p.productEnd + 1);
+          const product = D.concatSeqData([{ sequence: tails.f }, amp, { sequence: D.revcomp(tails.r) }], {
+            name: `${nameIn.value.trim() || "PCR"}_product`,
+            circular: false,
+          });
+          saveSeqToFile(product);
+        }),
+        { icon: "floppy-disk" }
+      ),
     ];
 
     U.openDialog({
       title: "Design PCR Primers",
       width: 900,
       body: [
+        templatePicker("Template", "primers", template),
         U.callout(sel ? `Region from your selection (${oneBased(sel.start)}–${oneBased(sel.end)}).` : "Tip: select a region in the sequence before opening this tool to fill in From/To.", "primary"),
         U.section("Region to amplify", U.row(U.field("From", from), U.field("To", to), U.field("Allow primers outside region (bp)", flank, "0 = primers start exactly at the ends (for cloning)"), U.field("Primer name prefix", nameIn))),
         U.section("Primer rules", U.row(U.field("Target Tm °C", tmT), U.field("Min Tm", tmMin), U.field("Max Tm", tmMax), U.field("Min length", lenMin), U.field("Max length", lenMax)), cond.el),
@@ -308,8 +382,8 @@
     return (doc && doc.id) || "default";
   };
 
-  function openOligoAnalyzer() {
-    const { seqData, sel } = current();
+  function openOligoAnalyzer({ template } = {}) {
+    const { seqData, sel } = current(template);
     const selSeq = sel ? D.circSlice(seqData.sequence, sel.start, sel.end >= sel.start ? sel.end + 1 : sel.end + 1 + seqData.sequence.length, seqData.circular) : "";
     const o2 = U.textArea("", { placeholder: "Oligo 2 (optional), 5′→3′ – for primer-pair checks", rows: 2 });
     const cond = conditionsEditor();
@@ -395,6 +469,7 @@
       title: "Primer / Oligo Analyzer",
       width: 760,
       body: [
+        templatePicker("Sequence to search", "oligo", template),
         U.section("Oligo 1 — where it binds on this sequence", view.el),
         U.section("Oligo 2 (optional)", o2),
         cond.el,
@@ -428,11 +503,20 @@
     return { start: ((start % n) + n) % n, codon, aa: D.CODON_TABLE[codon] || "?", reverse: !(feature.forward !== false && feature.strand !== -1) };
   }
 
-  function openMutagenesis() {
-    const { seqData, sel, name } = current();
+  function openMutagenesis({ template } = {}) {
+    const { seqData, sel, name } = current(template);
     const n = seqData.sequence.length;
     const cds = cdsFeatures(seqData);
-    const mode = U.select(cds.length ? ["Change an amino acid", "Change bases (substitute / delete / insert)"] : ["Change bases (substitute / delete / insert)"], cds.length ? "Change an amino acid" : undefined, { width: 290 });
+    const HAVE_PRIMERS = "I already have the primers";
+    const mode = U.select(
+      [
+        ...(cds.length ? ["Change an amino acid"] : []),
+        "Change bases (substitute / delete / insert)",
+        HAVE_PRIMERS,
+      ],
+      cds.length ? "Change an amino acid" : undefined,
+      { width: 290 }
+    );
     // amino-acid mode
     const featSel = U.select(cds.map((f, i) => ({ value: String(i), label: `${f.name} (${oneBased(f.start)}–${oneBased(f.end)}, ${f.forward === false ? "←" : "→"})` })), "0", { width: 290 });
     const residue = U.numberInput(1, { min: 1, width: 80 });
@@ -458,10 +542,118 @@
     const out = h("div");
     let result = null;
 
+    // ---- the pair you already ordered, rather than one designed here (#20)
+    const pastedF = U.textArea("", { placeholder: "Forward primer, 5′→3′", rows: 2 });
+    const pastedR = U.textArea("", { placeholder: "Reverse primer, 5′→3′", rows: 2 });
+    const pastedOut = h("div");
+    let pasted = null;
+    // Declared here, filled in just before the dialog opens: refresh() runs
+    // during setup, before the buttons exist, and a const would be in its
+    // temporal dead zone at that point.
+    let designButtons = [];
+    let pastedButtons = [];
+    const haveWrap = h(
+      "div",
+      {},
+      h(
+        "div",
+        { className: "ove-cl-hint", style: { marginBottom: "6px" } },
+        "Paste the pair you ordered. Where they sit, what they change and the mutant they make are all read off the primers and this template — nothing is restated by hand."
+      ),
+      U.row(U.field("Forward", pastedF), U.field("Reverse", pastedR)),
+      pastedOut
+    );
+
+    function buildPastedMutant() {
+      if (!pasted || !pasted.ok) throw new Error("Check the primers first");
+      const len = pasted.sequence.length;
+      const toMutant = (templatePos1) => {
+        const i = (templatePos1 - 1 - (pasted.offset || 0) + len * 2) % len;
+        return i;
+      };
+      const features = (pasted.edits || []).map((e) => ({
+        name: `${e.from}${e.position}${e.to}`,
+        type: "misc_difference",
+        start: toMutant(e.position),
+        end: toMutant(e.position),
+        forward: true,
+        notes: { note: [`${e.from} → ${e.to} at ${e.position} of ${name}`] },
+      }));
+      const fwdLen = pasted.forward.primer.length;
+      const revLen = pasted.reverse.primer.length;
+      const primers =
+        pasted.layout === "back-to-back"
+          ? [
+              { name: "pasted_F", start: 0, end: fwdLen - 1, forward: true, type: "primer_bind" },
+              { name: "pasted_R", start: len - revLen, end: len - 1, forward: false, type: "primer_bind" },
+            ]
+          : [];
+      return su.tidyUpSequenceData(
+        {
+          name: `${name}_mut`,
+          sequence: pasted.sequence,
+          circular: !!seqData.circular,
+          features,
+          primers,
+        },
+        { annotationsAsObjects: false }
+      );
+    }
+
+    const checkPasted = wrapTry(() => {
+      pasted = F.mutagenesis({
+        sequence: seqData.sequence,
+        isCircular: !!seqData.circular,
+        forward: pastedF.value,
+        reverse: pastedR.value,
+      });
+      pastedOut.innerHTML = "";
+      const res = pasted;
+      // the verdict first, as the hybridisation panel does
+      res.problems.forEach((msg) =>
+        pastedOut.appendChild(U.callout(msg, res.ok ? "warning" : "danger"))
+      );
+      if (res.forward && res.forward.ok) {
+        pastedOut.appendChild(
+          U.callout(`Forward primer: ${PH.describe(res.forward.site)}`, "none")
+        );
+      }
+      if (res.reverse && res.reverse.ok) {
+        pastedOut.appendChild(
+          U.callout(`Reverse primer: ${PH.describe(res.reverse.site)}`, "none")
+        );
+      }
+      if (!res.ok) return;
+      pastedOut.appendChild(
+        U.callout(
+          `${res.layout === "overlapping" ? "Overlapping pair (QuikChange)" : "Back-to-back pair (Q5 / KLD)"}: ` +
+            `${res.edits.length ? `${res.edits.length} base change${res.edits.length > 1 ? "s" : ""}` : "no base change"}` +
+            `${res.lengthChange ? `, ${res.lengthChange > 0 ? "+" : ""}${res.lengthChange} bp` : ""}.`,
+          res.edits.length || res.lengthChange ? "primary" : "warning"
+        )
+      );
+      if (res.edits.length) {
+        pastedOut.appendChild(
+          U.table(
+            [
+              { title: "Position (on this template)", render: (e) => e.position },
+              { title: "Template", render: (e) => e.from },
+              { title: "Primer", render: (e) => e.to },
+            ],
+            res.edits
+          )
+        );
+      }
+    });
+
     const refresh = () => {
-      const aaMode = mode.select.value.startsWith("Change an amino");
+      const haveMode = mode.select.value === HAVE_PRIMERS;
+      const aaMode = !haveMode && mode.select.value.startsWith("Change an amino");
       aaWrap.style.display = aaMode ? "" : "none";
-      baseWrap.style.display = aaMode ? "none" : "";
+      baseWrap.style.display = !haveMode && !aaMode ? "" : "none";
+      haveWrap.style.display = haveMode ? "" : "none";
+      designButtons.forEach((b) => (b.style.display = haveMode ? "none" : ""));
+      pastedButtons.forEach((b) => (b.style.display = haveMode ? "" : "none"));
       if (aaMode && cds.length) {
         try {
           const f = cds[+featSel.select.value];
@@ -538,42 +730,82 @@
       );
     });
 
+    // Built the same way whether it is going into a tab or into a file (#20).
+    function buildMutant() {
+      if (!result) throw new Error("Design primers first");
+      let mutant = D.mutateSeqData(seqData, { start: result.start, end: result.end, newBases: result.bases });
+      mutant = { ...mutant, name: `${name}_${result.label}`, circular: seqData.circular };
+      const m = mutant.sequence.toUpperCase();
+      const doubled = m + m;
+      const primers = [];
+      result.primers.forEach((p, i) => {
+        const probe = i === 0 ? p.seq.toUpperCase() : D.revcomp(p.seq).toUpperCase();
+        const pos = doubled.indexOf(probe);
+        if (pos >= 0)
+          primers.push({
+            name: p.name,
+            start: pos % m.length,
+            end: (pos + probe.length - 1) % m.length,
+            forward: i === 0,
+            type: "primer_bind",
+            notes: { note: [`5'-${p.seq}-3'`] },
+          });
+      });
+      mutant.primers = [...(mutant.primers || []), ...primers];
+      if (result.bases.length || result.end >= result.start) {
+        mutant.features = [
+          ...(mutant.features || []),
+          {
+            name: `mutation ${result.label}`,
+            type: "misc_difference",
+            start: result.start,
+            end: Math.max(result.start, result.start + Math.max(result.bases.length, 1) - 1),
+            forward: true,
+          },
+        ];
+      }
+      return su.tidyUpSequenceData(mutant, { annotationsAsObjects: false });
+    }
+
+    // Two sets, one shown at a time: designing a pair here, or checking the
+    // pair you already have (#20).
+    designButtons = [
+      U.button("Design primers", design, { intent: "primary", icon: "search" }),
+      U.button(
+        "Copy primers",
+        wrapTry(() => {
+          if (!result) throw new Error("Design primers first");
+          U.copyText(primersTsv(result.primers), "Primers copied");
+        }),
+        { icon: "clipboard" }
+      ),
+      U.button("Open mutant plasmid", wrapTry(() => openInNewWindow(buildMutant())), {
+        icon: "document-open",
+      }),
+      U.button("Save mutant…", wrapTry(() => saveSeqToFile(buildMutant())), { icon: "floppy-disk" }),
+    ];
+    pastedButtons = [
+      U.button("Check these primers", checkPasted, { intent: "primary", icon: "search" }),
+      U.button("Open mutant plasmid", wrapTry(() => openInNewWindow(buildPastedMutant())), {
+        icon: "document-open",
+      }),
+      U.button("Save mutant…", wrapTry(() => saveSeqToFile(buildPastedMutant())), {
+        icon: "floppy-disk",
+      }),
+    ];
+
+    refresh();
+
     U.openDialog({
       title: "Site-Directed Mutagenesis",
       width: 820,
-      body: [U.section("What to change", U.field("Mode", mode.el), h("div", { style: { height: "8px" } }), aaWrap, baseWrap), U.section("Primer design", U.row(U.field("Method", method.el), U.field("Target Tm °C", tmT))), out],
-      footer: [
-        U.button("Design primers", design, { intent: "primary", icon: "search" }),
-        U.button("Copy primers", wrapTry(() => {
-          if (!result) throw new Error("Design primers first");
-          U.copyText(primersTsv(result.primers), "Primers copied");
-        }), { icon: "clipboard" }),
-        U.button(
-          "Open mutant plasmid",
-          wrapTry(() => {
-            if (!result) throw new Error("Design primers first");
-            let mutant = D.mutateSeqData(seqData, { start: result.start, end: result.end, newBases: result.bases });
-            mutant = { ...mutant, name: `${name}_${result.label}`, circular: seqData.circular };
-            const m = mutant.sequence.toUpperCase();
-            const doubled = m + m;
-            const primers = [];
-            result.primers.forEach((p, i) => {
-              const probe = i === 0 ? p.seq.toUpperCase() : D.revcomp(p.seq).toUpperCase();
-              const pos = doubled.indexOf(probe);
-              if (pos >= 0) primers.push({ name: p.name, start: pos % m.length, end: (pos + probe.length - 1) % m.length, forward: i === 0, type: "primer_bind", notes: { note: [`5'-${p.seq}-3'`] } });
-            });
-            mutant.primers = [...(mutant.primers || []), ...primers];
-            if (result.bases.length || result.end >= result.start) {
-              mutant.features = [
-                ...(mutant.features || []),
-                { name: `mutation ${result.label}`, type: "misc_difference", start: result.start, end: Math.max(result.start, result.start + Math.max(result.bases.length, 1) - 1), forward: true },
-              ];
-            }
-            openInNewWindow(su.tidyUpSequenceData(mutant, { annotationsAsObjects: false }));
-          }),
-          { icon: "document-open" }
-        ),
+      body: [
+        templatePicker("Template", "mutagenesis", template),
+        U.section("What to change", U.field("Mode", mode.el), h("div", { style: { height: "8px" } }), aaWrap, baseWrap, haveWrap),
+        U.section("Primer design", U.row(U.field("Method", method.el), U.field("Target Tm °C", tmT))),
+        out,
       ],
+      footer: [...designButtons, ...pastedButtons],
     });
   }
 
@@ -590,6 +822,72 @@
       frags,
       { onSelect, selectedIndex }
     );
+  }
+
+  // The template a tool runs on, changeable from inside the tool: any open
+  // tab, a pasted sequence, or a file (#20). Changing it reopens the dialog
+  // on the new template -- everything in a cloning dialog is derived from the
+  // sequence, so there is nothing worth carrying across.
+  function templatePicker(label, toolName, chosen) {
+    const opts = availableSequences();
+    const names = opts.map((o) => `${o.name}, ${o.seqData.sequence.length} bp`);
+    const currentName = chosen ? `${chosen.name || "Untitled"} (chosen)` : names[0];
+    const sel = U.select(
+      [...(chosen ? [{ value: "-1", label: currentName }] : []), ...names.map((label2, i) => ({ value: String(i), label: label2 }))],
+      chosen ? "-1" : "0",
+      { width: 320 }
+    );
+    sel.select.addEventListener("change", () => {
+      const i = +sel.select.value;
+      if (i >= 0) reopenWith(toolName, opts[i].seqData);
+    });
+    return U.row(
+      U.field(label, sel.el),
+      U.button(
+        "Open file…",
+        async () => {
+          const [sd] = await pickFiles(false);
+          if (sd) reopenWith(toolName, sd);
+        },
+        { icon: "folder-open" }
+      ),
+      U.button("Paste…", () => pasteSequence((sd) => reopenWith(toolName, sd)), { icon: "clipboard" })
+    );
+  }
+
+  // Paste a sequence in, wherever one is wanted (#20).
+  function pasteSequence(onPick, { circular = true, name = "pasted_template" } = {}) {
+    const ta = U.textArea("", { placeholder: "Paste DNA sequence (FASTA or plain)", rows: 6 });
+    const nm = U.textInput(name, { width: 200 });
+    const circ = U.checkbox("Circular", circular);
+    const d = U.openDialog({
+      title: "Paste a sequence",
+      width: 560,
+      body: [U.row(U.field("Name", nm), circ.el), ta],
+      footer: [
+        U.button(
+          "Use sequence",
+          () => {
+            const seq = D.clean(ta.value.replace(/^>.*$/gm, ""));
+            if (seq.length < 10) return U.toast("Sequence is too short", "error");
+            const sd = su.tidyUpSequenceData(
+              { name: nm.value || name, sequence: seq, circular: circ.input.checked },
+              { annotationsAsObjects: false }
+            );
+            pickedFiles.push({ name: sd.name, seqData: sd });
+            d.close();
+            onPick(sd);
+          },
+          { intent: "primary" }
+        ),
+      ],
+    });
+  }
+
+  function reopenWith(toolName, seqData) {
+    U.closeAllDialogs && U.closeAllDialogs();
+    const fn = TOOLS[toolName];
+    if (fn) wrapTry(() => fn({ template: seqData }))();
   }
 
   function sequencePicker(label, onPick, { allowPaste = true } = {}) {
@@ -640,8 +938,8 @@
     return holder;
   }
 
-  function openRestrictionCloning() {
-    const { seqData: vector, name } = current();
+  function openRestrictionCloning({ template } = {}) {
+    const { seqData: vector, name } = current(template);
     const vE1 = enzymeInput("", vector);
     const vE2 = enzymeInput("", vector);
     const iE1 = enzymeInput("");
@@ -722,8 +1020,19 @@
             { title: "Size", render: (p) => `${p.sequenceData.sequence.length} bp` },
             {
               title: "",
-              render: (p) =>
-                U.button("Open", () => openInNewWindow({ ...p.sequenceData, name: `${productName.value || "clone"}${res.products.length > 1 ? `_${p.orientation}` : ""}` }), { intent: "primary", icon: "document-open" }),
+              render: (p) => {
+                const named = () =>
+                  `${productName.value || "clone"}${res.products.length > 1 ? `_${p.orientation}` : ""}`;
+                return h(
+                  "div",
+                  { style: { display: "flex", gap: "4px" } },
+                  U.button("Open", () => openInNewWindow({ ...p.sequenceData, name: named() }), {
+                    intent: "primary",
+                    icon: "document-open",
+                  }),
+                  U.button("Save…", () => saveSeqToFile(p.sequenceData, named()), { icon: "floppy-disk" })
+                );
+              },
             },
           ],
           res.products
@@ -735,6 +1044,7 @@
       title: "Restriction Cloning (digest + ligate)",
       width: 860,
       body: [
+        templatePicker("Vector", "restriction", template),
         U.section(`Vector: ${name} (${vector.sequence.length} bp, ${vector.circular ? "circular" : "linear"})`, U.row(U.field("Enzyme 1", vE1.el), U.field("Enzyme 2 (optional)", vE2.el)), vFragsBox),
         U.section("Insert", picker, h("div", { className: "ove-cl-hint", style: { marginBottom: "6px" } }, insertBox), U.row(U.field("Enzyme 1", iE1.el), U.field("Enzyme 2 (optional)", iE2.el, "leave both empty for a blunt, uncut PCR product")), iFragsBox),
         U.section("Product", U.row(U.field("Name", productName)), out),
@@ -744,8 +1054,8 @@
   }
 
   // --------------------------------------------------------- Gibson / HiFi
-  function openGibson() {
-    const { seqData: vector, sel, caret, name } = current();
+  function openGibson({ template } = {}) {
+    const { seqData: vector, sel, caret, name } = current(template);
     const n = vector.sequence.length;
     const linMode = U.select(
       [
@@ -819,6 +1129,145 @@
       renderList();
     });
 
+    // ------------------------------------------------- primers you already have
+    // One slot per fragment, each with its own template: a NEBuilder run is
+    // two primers per fragment against two to four different plasmids, and
+    // which template a pair belongs to is the one thing the primers cannot
+    // tell us (#20).
+    const slots = [];
+    const slotsBox = h("div");
+    const pastedOut = h("div");
+    let pastedResult = null;
+
+    function slotPicker(slot) {
+      const opts = availableSequences();
+      const sel = U.select(
+        [
+          { value: "", label: slot.seqData ? `${slot.seqData.name}, ${slot.seqData.sequence.length} bp` : "— choose a template —" },
+          ...opts.map((o, i) => ({ value: String(i), label: `${o.name}, ${o.seqData.sequence.length} bp` })),
+        ],
+        "",
+        { width: 260 }
+      );
+      sel.select.addEventListener("change", () => {
+        if (sel.select.value === "") return;
+        slot.seqData = opts[+sel.select.value].seqData;
+        renderSlots();
+      });
+      return sel.el;
+    }
+
+    function renderSlots() {
+      slotsBox.innerHTML = "";
+      if (!slots.length) {
+        slotsBox.appendChild(
+          h("div", { className: "ove-cl-hint" }, "No fragments yet — add one per PCR you are running.")
+        );
+        return;
+      }
+      slots.forEach((slot, i) => {
+        slotsBox.appendChild(
+          U.section(
+            `Fragment ${i + 1}${slot.seqData ? ` — ${slot.seqData.name}` : ""}`,
+            U.row(
+              U.field("Template", slotPicker(slot)),
+              U.button("Open file…", async () => {
+                const [sd] = await pickFiles(false);
+                if (sd) {
+                  slot.seqData = sd;
+                  renderSlots();
+                }
+              }, { icon: "folder-open" }),
+              U.button("Paste…", () => pasteSequence((sd) => {
+                slot.seqData = sd;
+                renderSlots();
+              }), { icon: "clipboard" }),
+              U.button("Remove", () => {
+                slots.splice(i, 1);
+                renderSlots();
+              }, { icon: "trash", minimal: true })
+            ),
+            U.row(U.field("Forward primer", slot.fwd), U.field("Reverse primer", slot.rev))
+          )
+        );
+      });
+    }
+
+    function addSlot(seqData) {
+      slots.push({
+        seqData: seqData || null,
+        fwd: U.textArea("", { placeholder: "Forward primer, 5′→3′ (tail + annealing)", rows: 2 }),
+        rev: U.textArea("", { placeholder: "Reverse primer, 5′→3′ (tail + annealing)", rows: 2 }),
+      });
+      renderSlots();
+    }
+    addSlot(vector);
+    addSlot(null);
+
+    const checkPasted = wrapTry(() => {
+      pastedOut.innerHTML = "";
+      pastedResult = F.gibson({
+        circular: true,
+        minOverlap: +overlap.value || 15,
+        fragments: slots.map((slot, i) => ({
+          name: slot.seqData ? slot.seqData.name : `Fragment ${i + 1}`,
+          sequence: slot.seqData ? slot.seqData.sequence : "",
+          isCircular: slot.seqData ? !!slot.seqData.circular : false,
+          forward: slot.fwd.value,
+          reverse: slot.rev.value,
+        })),
+      });
+      const res = pastedResult;
+      res.problems.forEach((msg) =>
+        pastedOut.appendChild(U.callout(msg, res.ok ? "warning" : "danger"))
+      );
+      if (!res.ok) {
+        if (!res.problems.length) pastedOut.appendChild(U.callout("Could not read these primers.", "danger"));
+        return;
+      }
+      pastedOut.appendChild(
+        U.callout(
+          `Assembles as ${res.order.join(" → ")} → ${res.order[0]}: ${res.sequence.length} bp circular construct.`,
+          "success"
+        )
+      );
+      pastedOut.appendChild(
+        U.table(
+          [
+            { title: "Junction", render: (j) => `${j.after} → ${j.before}` },
+            { title: "Overlap", render: (j) => `${j.length} nt` },
+            { title: "Sequence", render: (j) => U.primerSpan("", j.overlap) },
+          ],
+          res.junctions
+        )
+      );
+    });
+
+    function buildPastedConstruct() {
+      if (!pastedResult || !pastedResult.ok) throw new Error("Check the primers first");
+      return su.tidyUpSequenceData(
+        {
+          name: constructName.value || "assembly",
+          sequence: pastedResult.sequence,
+          circular: true,
+        },
+        { annotationsAsObjects: false }
+      );
+    }
+
+    const haveWrap = h(
+      "div",
+      {},
+      h(
+        "div",
+        { className: "ove-cl-hint", style: { marginBottom: "6px" } },
+        "One slot per PCR. The 3′ ends say what each pair amplifies and the 5′ tails say what joins to what, so the order of the assembly is read off the primers rather than asked for."
+      ),
+      slotsBox,
+      U.row(U.button("Add fragment", () => addSlot(null), { icon: "add" })),
+      pastedOut
+    );
+
     function vectorPiece() {
       const mode = linMode.select.value;
       if (mode === "enzymes") {
@@ -869,32 +1318,70 @@
       );
     });
 
+    // Designing the overlaps here, or reading them off primers that already
+    // exist (#20). The settings and the construct name serve both.
+    const DESIGN = "Design the overlaps here";
+    const HAVE = "I already have the primers";
+    const gMode = U.select([DESIGN, HAVE], DESIGN, { width: 290 });
+    const designWrap = h(
+      "div",
+      {},
+      U.section(`Vector: ${name} (${n} bp)`, U.field("Linearize by", linMode.el), h("div", { style: { height: "6px" } }), enzWrap),
+      U.section("Inserts (in order)", picker, listBox)
+    );
+    const designButtons = [
+      U.button("Design assembly", design, { intent: "primary", icon: "build" }),
+      U.button("Copy primers", wrapTry(() => {
+        if (!result) throw new Error("Design the assembly first");
+        U.copyText(primersTsv(result.pieces.flatMap((p) => p.primers)), "Primers copied");
+      }), { icon: "clipboard" }),
+      U.button("Open assembled construct", wrapTry(() => {
+        if (!result) throw new Error("Design the assembly first");
+        openInNewWindow({ ...result.construct, name: constructName.value || "assembly" });
+      }), { icon: "document-open" }),
+      U.button("Save construct…", wrapTry(() => {
+        if (!result) throw new Error("Design the assembly first");
+        saveSeqToFile(result.construct, constructName.value || "assembly");
+      }), { icon: "floppy-disk" }),
+    ];
+    const pastedButtons = [
+      U.button("Check these primers", checkPasted, { intent: "primary", icon: "search" }),
+      U.button("Open assembled construct", wrapTry(() => openInNewWindow(buildPastedConstruct())), {
+        icon: "document-open",
+      }),
+      U.button("Save construct…", wrapTry(() => saveSeqToFile(buildPastedConstruct())), {
+        icon: "floppy-disk",
+      }),
+    ];
+    const gRefresh = () => {
+      const have = gMode.select.value === HAVE;
+      designWrap.style.display = have ? "none" : "";
+      haveWrap.style.display = have ? "" : "none";
+      out.style.display = have ? "none" : "";
+      designButtons.forEach((b) => (b.style.display = have ? "none" : ""));
+      pastedButtons.forEach((b) => (b.style.display = have ? "" : "none"));
+    };
+    gMode.select.addEventListener("change", gRefresh);
+    gRefresh();
+
     U.openDialog({
       title: "Gibson / NEBuilder HiFi Assembly",
       width: 900,
       body: [
-        U.section(`Vector: ${name} (${n} bp)`, U.field("Linearize by", linMode.el), h("div", { style: { height: "6px" } }), enzWrap),
-        U.section("Inserts (in order)", picker, listBox),
+        templatePicker("Vector / backbone", "gibson", template),
+        U.field("Mode", gMode.el),
+        designWrap,
+        haveWrap,
         U.section("Settings", U.row(U.field("Overlap (bp)", overlap), U.field("Target annealing Tm °C", tmT), U.field("Construct name", constructName))),
         out,
       ],
-      footer: [
-        U.button("Design assembly", design, { intent: "primary", icon: "build" }),
-        U.button("Copy primers", wrapTry(() => {
-          if (!result) throw new Error("Design the assembly first");
-          U.copyText(primersTsv(result.pieces.flatMap((p) => p.primers)), "Primers copied");
-        }), { icon: "clipboard" }),
-        U.button("Open assembled construct", wrapTry(() => {
-          if (!result) throw new Error("Design the assembly first");
-          openInNewWindow({ ...result.construct, name: constructName.value || "assembly" });
-        }), { icon: "document-open" }),
-      ],
+      footer: [...designButtons, ...pastedButtons],
     });
   }
 
   // ---------------------------------------------------------------- gel
-  function openGelSimulator() {
-    const { seqData } = current();
+  function openGelSimulator({ template } = {}) {
+    const { seqData } = current(template);
     const agarose = U.select(Object.keys(D.AGAROSE_RANGES).map((k) => ({ value: k, label: `${k}% agarose` })), "1", { width: 140 });
     const ladder = U.select(Object.keys(D.LADDERS), "GeneRuler 1 kb Plus", { width: 200 });
     const singles = D.COMMON_ENZYMES.filter((e) => {
@@ -1056,6 +1543,7 @@
       title: "Agarose Gel Simulator",
       width: 980,
       body: [
+        templatePicker("Sequence", "gel", template),
         U.row(U.field("Gel", agarose.el), U.field("Ladder (lane 1)", ladder.el)),
         U.section("Lanes", lanesBox),
         gelBox,

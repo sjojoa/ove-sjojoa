@@ -36,11 +36,29 @@ Calculations in [`src/cloning/dnaTools.js`](src/cloning/dnaTools.js), UI in `clo
   for Taq and Q5/Phusion, hairpin/dimer warnings, and optional 5′ restriction sites or tags
 - **Primer / Oligo Analyzer** — Tm, hairpins, self- and cross-dimers, and binding-site
   search (≤2 mismatches, 3′ end must match)
-- **Site-Directed Mutagenesis** — by amino acid or by bases; Q5-style or QuikChange primers
+- **Site-Directed Mutagenesis** — by amino acid or by bases; Q5-style or QuikChange primers.
+  Also works the other way round: **"I already have the primers"** takes the pair you
+  ordered and tells you what it makes
 - **Restriction Cloning** — digest, pick fragments, ligate; models sticky/blunt/Type IIS ends
   and warns about non-directional cloning and vector self-ligation
-- **Gibson / HiFi Assembly** — overlap primers and the assembled construct
+- **Gibson / HiFi Assembly** — overlap primers and the assembled construct. Also
+  **"I already have the primers"**: one slot per PCR, each with its own template, and the
+  order of the assembly is read off the primers rather than asked for
 - **Agarose Gel Simulator** — ladders, multiple lanes, 0.7–3% gels, supercoiled/nicked forms
+
+**Cloning designed somewhere else** ([`src/cloning/fromPrimers.js`](src/cloning/fromPrimers.js)) —
+the tools run backwards as well as forwards. Paste the primers you already have, say which
+template each pair runs on, and the construct is derived from them: the 3′ annealing region
+says where each primer sits, the primer's own bases (not the template's) go into the
+product, so a mismatch is the edit, and the 5′ tails say what joins to what. Nothing is
+guessed, and the verdict comes first — a primer that binds nowhere or in two places, a pair
+facing the wrong way, an overlap that matches no other fragment or is too short to assemble
+on, are all named before any map is offered.
+
+**Every tool can be pointed at a different sequence.** A dropdown at the top of each one
+lists the tab in front, the other open tabs, anything built in this session and any file
+opened from the picker, with buttons to open another file or paste a sequence in. Results
+can be opened as a tab or **saved straight to a file**.
 
 Melting temperatures use SantaLucia (1998) nearest-neighbour parameters with the
 Owczarzy (2008) salt correction, and match Biopython's `Tm_NN` to within 0.001 °C across

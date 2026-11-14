@@ -49,6 +49,12 @@
     return { overlay, close };
   }
 
+  // Changing a tool's template reopens it, so the dialog that asked has to go
+  // first -- otherwise the two stack up (#20).
+  function closeAllDialogs() {
+    document.querySelectorAll(".ove-cl-overlay").forEach((el) => el.remove());
+  }
+
   const field = (label, control, hint) =>
     h("label", { className: "bp3-label ove-cl-field" }, h("span", { className: "ove-cl-field-label" }, label), control, hint ? h("span", { className: "ove-cl-hint" }, hint) : null);
 
@@ -141,5 +147,5 @@
   const row = (...children) => h("div", { className: "ove-cl-row" }, ...children);
   const callout = (text, intent = "primary") => h("div", { className: `bp3-callout bp3-intent-${intent} ove-cl-callout` }, text);
 
-  window.oveCloningUI = { h, openDialog, field, numberInput, textInput, textArea, select, checkbox, button, table, fmt, toast, copyText, primerSpan, warnList, section, row, callout };
+  window.oveCloningUI = { h, openDialog, closeAllDialogs, field, numberInput, textInput, textArea, select, checkbox, button, table, fmt, toast, copyText, primerSpan, warnList, section, row, callout };
 })();
