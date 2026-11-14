@@ -317,6 +317,24 @@
         if (Number.isFinite(t)) chips.push(`Tm ${t.toFixed(1)} °C (whole oligo)`);
       }
       chips.forEach((c) => stats.appendChild(h("span", { className: "ove-ph-chip" }, c)));
+      // A Tm means nothing without the buffer it was computed at, and this is
+      // the view people read one off while designing. Same wording and the
+      // same dialog as the status bar, so the two cannot disagree (#27).
+      const note = window.oveTmNote;
+      if (note && chips.some((c) => String(c).startsWith("Tm "))) {
+        const where = window.oveSelectionStats;
+        stats.appendChild(
+          h(
+            "a",
+            {
+              className: "ove-ph-tmnote",
+              title: "What this melting temperature assumes",
+              onclick: () => where && where.showConditions && where.showConditions(),
+            },
+            note.shortNote()
+          )
+        );
+      }
     }
 
     function renderSites() {

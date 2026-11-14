@@ -52,6 +52,10 @@ Owczarzy (2008) salt correction, and match Biopython's `Tm_NN` to within 0.001 �
 - **Per-feature colours** — a colour row in the Add/Edit Feature dialog, saved as a
   `/color=` qualifier so it survives a round trip through `.gb` and opens correctly elsewhere
 - **File → Open Recent** — last 10 files, ⌘1–⌘9, auto-pruned
+- **⌘J makes a primer** — upstream binds ⌘K to New Feature and ⌘L to New Part but left
+  New Primer with no key at all, which in a fork built around primer work is the wrong
+  one to be missing. ⌘J sits next to them, so the three annotations you can create are
+  j-k-l in a row.
 - **One File menu, in both places**
   ([`src/features/fileMenu.js`](src/features/fileMenu.js)) — New File, Open…, Open Recent
   and Reopen Last Closed Window are in the editor window's own File menu as well as the
@@ -133,8 +137,13 @@ Owczarzy (2008) salt correction, and match Biopython's `Tm_NN` to within 0.001 �
   candidate primer can be judged without opening a tool. The Tm is this fork's own
   (SantaLucia 1998 nearest-neighbour with the Owczarzy 2008 salt correction), not
   upstream's, which reads about 5 °C higher and would have disagreed with every number the
-  Cloning menu prints. **Tm conditions** in the status bar states the model and the primer
-  and salt concentrations behind it. Above 40 bp the line carries GC alone: a
+  Cloning menu prints. **Tm conditions** in the status bar states the model, the
+  primer and salt concentrations behind it, and how the number compares with NEB's own
+  calculator ([`tmNote.js`](src/features/tmNote.js)): about 1–1.5 °C below their Phusion
+  figure and 4–5 °C below their Q5 figure, because NEB apply a monovalent-only salt
+  correction there. NEB's own advice for a third-party Tm used with Q5 — anneal at
+  Tm + 3 °C — is quoted with it. The primer hybridisation view carries the same line
+  under its Tm, from the same module, so the two cannot drift apart. Above 40 bp the line carries GC alone: a
   nearest-neighbour Tm of a kilobase is not a quantity to act on. Both View-menu toggles
   still work and both default on.
 - **Simulate PCR takes a pasted primer**
