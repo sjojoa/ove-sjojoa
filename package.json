@@ -1,6 +1,6 @@
 {
   "name": "ove-sjojoa",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "description": "A fork of TeselaGen's Open Vector Editor desktop app, with offline Sanger-read alignment, cloning tools, document tabs and per-feature colours",
   "main": "main.js",
   "license": "MIT",
