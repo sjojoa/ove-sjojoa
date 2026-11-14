@@ -14,6 +14,7 @@ module.exports = function createMenu({
   openPath,
   reopenLastClosedWindow,
   canReopenClosedWindow,
+  askWindowForHistory,
 }) {
   const recent = recentFiles.list();
   // Two files can share a basename, so show the parent folder to tell them apart.
@@ -94,6 +95,21 @@ module.exports = function createMenu({
           accelerator: "CmdOrCtrl+Shift+T",
           enabled: !!(canReopenClosedWindow && canReopenClosedWindow()),
           click: () => reopenLastClosedWindow && reopenLastClosedWindow(),
+        },
+        { type: "separator" },
+        {
+          // The history is written into the sequence file itself, so it is
+          // the file that grows; these are the ways to take it back (#6).
+          // Which file is the renderer's business -- it knows which tab is in
+          // front -- so each item just asks the focused window.
+          label: "Version History",
+          submenu: [
+            { label: "Trim to Last 10 Versions", click: () => askWindowForHistory({ keep: 10 }) },
+            { label: "Trim to Last 5 Versions", click: () => askWindowForHistory({ keep: 5 }) },
+            { label: "Trim to Last Version Only", click: () => askWindowForHistory({ keep: 1 }) },
+            { type: "separator" },
+            { label: "Delete All History\u2026", click: () => askWindowForHistory({ keep: 0 }) },
+          ],
         },
         { type: "separator" },
         isMac ? { role: "close" } : { role: "quit" },

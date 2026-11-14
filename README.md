@@ -57,6 +57,17 @@ Owczarzy (2008) salt correction, and match Biopython's `Tm_NN` to within 0.001 �
   and Reopen Last Closed Window are in the editor window's own File menu as well as the
   system menu bar, so the menu next to the sequence can open a file. Same actions, same
   recent list, same shortcuts (shown as hints; the system menu still owns the keys).
+- **Version history, kept inside the sequence file**
+  ([`src/main_utils/history.js`](src/main_utils/history.js)) — every save of a `.gb`
+  records what was written, so the toolbar's Version History view lists the earlier
+  versions of a construct, previews any of them and can revert to one. The history rides
+  in the file as a single compressed comment, which means it travels with the plasmid:
+  copy the file to a shared drive or hand it to someone else and its record goes too,
+  instead of staying behind in this Mac's application-support folder. A version costs
+  about 4 KB for a 7 kb plasmid, the last 25 are kept, an unchanged save does not add
+  one, and Save As carries the history to the new file so a renamed construct keeps its
+  lineage. **File → Version History** trims to the last 10, 5 or 1, or deletes the lot,
+  when a file has grown further than it is worth.
 - **The files you had open come back next launch**
   ([`src/main_utils/session.js`](src/main_utils/session.js)) — close the app with the
   vector, the insert and the donor on one strip and they are there again, in the same
@@ -223,6 +234,7 @@ keyboard ones are handled by this app's own Edit menu:
 | a primer created without a selection began with one stray base | the Bases field is seeded from the stretch of template the annotation covers, and with no selection that range is the caret — a single character, adopted by the form as the primer's real value, which had to be deleted before the oligo could be typed |
 | you could not see which way a primer pointed | primers drawn with their bases were given an arrowhead a fifth of a character wide, which at any normal zoom reads as a bevel rather than a point — the one thing a primer has to say at a glance |
 | an arrowhead could be longer than the annotation it points from | `arrowPointiness` scales the head without any cap, so a value above 1 puts the back of the arrow in front of its tip and draws a bowtie; nothing upstream passed one, so nothing upstream hit it |
+| Version History listed only the current version | the view and its Restore button are complete upstream, but nothing was passed to `getVersionList` / `getSequenceAtVersion`, so the panel opened on a table of one row |
 | a cancelled save still marked the sequence saved | OVE stamps its `lastSavedId` from a `.then()` that runs whether or not a file was written, so the save icon went quiet after you cancelled the dialog; the unsaved-changes guard keeps its own record per tab |
 
 ## Installing the app
@@ -283,11 +295,14 @@ yarn build-mac       # signed/notarised build; needs APPLEID + APPLEIDPASS
   parameters, the pasted-primer path into Simulate PCR, and the rebuilt Add/Edit Primer
   dialog (bases drive the annotation; the Strand radio reverse-complements) have been
   exercised against real plasmids and behave as described above: the sites they report
-  are the sites those oligos pair at, strand and 5′ tails included. **The Tm numbers
-  shown alongside them are still pending** — the arithmetic is checked against Biopython
-  (below), but which Tm model this fork should present for primer work has not been
-  settled (issue #12), so read a reported Tm as indicative and do not order oligos off it
-  without checking.
+  are the sites those oligos pair at, strand and 5′ tails included. **Which Tm this app reports is now
+  settled** (issue #12): SantaLucia (1998) nearest-neighbour with the Owczarzy (2008)
+  Mg²⁺/dNTP correction, at 50 mM Na⁺, 1.5 mM Mg²⁺, 0.8 mM dNTPs and 250 nM primer,
+  checked against Biopython (below). Measured against NEB's own calculator on the same
+  oligos, it sits about 1–1.5 °C below their Phusion figure and 4–5 °C below their Q5
+  figure — the gap to Q5 is expected, since NEB use a monovalent-only salt correction
+  there. NEB's own advice for a third-party Tm used with Q5 is to anneal at Tm + 3.
+  Those conditions are not yet stated in the UI (issue #27).
 
 **Everything else is unvalidated.** The Cloning menu (primer design, restriction cloning,
 mutagenesis, Gibson assembly, the gel simulator) and the CDS read-through translations are
@@ -302,7 +317,7 @@ within 0.001 °C across 200 random primers under four buffer conditions. That va
 Tm arithmetic, not the primer-design decisions built on top of it.
 
 ```bash
-yarn test   # 160 unit tests
+yarn test   # 260 unit tests
 ```
 
 ## Licence

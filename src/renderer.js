@@ -53,6 +53,9 @@ function setWindowTitle(name) {
 // calls this with nothing and we take the live state instead.
 async function saveDoc(doc, { isSaveAs = false, sequenceDataToSave, onSuccessCallback } = {}) {
   if (!doc) return false;
+  // Where this sequence was before Save As moved it, so its saved-version
+  // history can follow it to the new file rather than starting over (#6).
+  const previousFilePath = doc.filePath;
   if (!sequenceDataToSave) {
     const live = doc.editor ? doc.editor.getState().sequenceData : doc.seqJson;
     sequenceDataToSave = JSON.parse(JSON.stringify(live || {}));
@@ -106,6 +109,7 @@ async function saveDoc(doc, { isSaveAs = false, sequenceDataToSave, onSuccessCal
 
   window.api.send("ove_saveFile", {
     filePath: newFilePath,
+    previousFilePath,
     sequenceDataToSave,
   });
   // This tab is now clean as far as the guard is concerned. OVE keeps its
@@ -177,6 +181,12 @@ window.oveMakeEditor = function oveMakeEditor(container, doc, restoring) {
     saveDoc(doc, { isSaveAs: true, sequenceDataToSave, onSuccessCallback }),
   onSave: (event, sequenceDataToSave, editorProps, onSuccessCallback) =>
     saveDoc(doc, { sequenceDataToSave, onSuccessCallback }),
+  // Version History (#6). The history is kept inside the sequence file, so
+  // the main process reads it off disk; a tab with no file yet simply has
+  // none, and upstream hides the view when these are absent.
+  getVersionList: () => window.api.send("ove_historyList", { filePath: doc.filePath }),
+  getSequenceAtVersion: (versionId) =>
+    window.api.send("ove_historyAt", { filePath: doc.filePath, versionId }),
   onImport: (sequenceData) => {
     try {
       doc.editor.updateEditor({
