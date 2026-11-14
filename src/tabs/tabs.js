@@ -84,6 +84,11 @@
   function activate(id) {
     const doc = docById(id);
     if (!doc) return;
+    // Before anything is hidden: a display:none element reports a scroll
+    // position of 0 and has lost the real one, so the tab being left has to
+    // be read now, not when it is torn down a tick later (#23).
+    const leaving = getActive();
+    if (leaving && leaving !== doc) rememberScroll(leaving);
     activeId = id;
     docs.forEach((d) => d.container.classList.toggle("ove-doc-active", d.id === id));
     window.oveSetWindowTitle(doc.name);
@@ -144,7 +149,44 @@
       window.editor = doc.editor; // the alignment + cloning code reads this
       window.oveActiveEditorName = doc.editorName;
       if (window.oveCloning) window.oveCloning.setEditor(doc.editor);
+      restoreScroll(doc);
     }, 0);
+  }
+
+  // ------------------------------------------------- where each tab was
+  // Switching tabs tears the editor down and builds it again, so the row
+  // view's scroll position goes with it. Keep it on the doc and put it back,
+  // or every switch drops you at base 1 (#23).
+  const SCROLL_TRIES = 40; // ~40 frames, about two thirds of a second
+
+  function rowViewOf(doc) {
+    const S = window.oveScrollMemory;
+    return S ? S.rowViewIn(doc && doc.container) : null;
+  }
+
+  function rememberScroll(doc) {
+    const S = window.oveScrollMemory;
+    if (!S) return;
+    const where = S.capture(rowViewOf(doc));
+    // Only overwrite when there was something to read: an editor torn down
+    // before its row view ever rendered must not wipe what we already know.
+    if (where !== null) doc.scrollFraction = where;
+  }
+
+  // The row view renders a frame or two after the editor is created, and is
+  // not scrollable until it has its rows, so this retries until it takes.
+  function restoreScroll(doc) {
+    const S = window.oveScrollMemory;
+    if (!S || !doc || !(doc.scrollFraction > 0)) return;
+    const want = doc.scrollFraction;
+    let tries = 0;
+    const tick = () => {
+      // the user moved on; whatever that tab shows now is not ours to set
+      if (doc !== getActive()) return;
+      if (S.restore(rowViewOf(doc), want)) return;
+      if (++tries < SCROLL_TRIES) window.requestAnimationFrame(tick);
+    };
+    window.requestAnimationFrame(tick);
   }
 
   // Nothing tells us when a sequence changes -- the edit happens inside the

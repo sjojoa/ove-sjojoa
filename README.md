@@ -219,6 +219,7 @@ keyboard ones are handled by this app's own Edit menu:
 | nothing was remembered about what was open | `electron-window-state` restored the window's geometry but not its contents, so a cloning session of four files had to be rebuilt by hand through Open Recent every morning |
 | the editor window's File menu could not open a file | it held only the items that act on the sequence in front of you; opening anything else meant going up to the system menu bar, which on a large display is a long way from where you are working |
 | the editor menu was computed once and cached forever | `getFilteredMenu` memoizes on the identity of the filter function, so a menu whose contents change while the app runs could never show them — and handing over a new function does not help, since `menuFilter` is a creation-time prop `updateEditor` ignores |
+| switching tabs dropped you back at base 1 | only the tab in front has a live editor -- two of them fight over the single shared redux store -- so the one you leave is torn down, taking the row view's scroll position with it; each tab now remembers how far through its sequence it was |
 | a cancelled save still marked the sequence saved | OVE stamps its `lastSavedId` from a `.then()` that runs whether or not a file was written, so the save icon went quiet after you cancelled the dialog; the unsaved-changes guard keeps its own record per tab |
 
 ## Installing the app
