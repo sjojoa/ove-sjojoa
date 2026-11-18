@@ -24,4 +24,18 @@ function anyToJson(data, fileName) {
   return bioParsers.anyToJson(data, { fileName: correctFileName(data, fileName) });
 }
 
-module.exports = { anyToJson, correctFileName };
+// The lab's inline-tagged format, read the same way whether it arrives as a
+// file or as pasted text. bio-parsers would read it as one long run of bases
+// with the tags treated as garbage, so it is caught before that; a .txt with
+// no tag pairs in it is not tagged text and still goes to bio-parsers.
+// `fallbackName` is used only when the text carries no name of its own.
+function readTagged(taggedText, text, fallbackName) {
+  if (!taggedText.looksTagged(text)) return null;
+  const { sequenceData, warnings } = taggedText.taggedToSequenceData(text);
+  if (!sequenceData.name || sequenceData.name === "Untitled Sequence") {
+    sequenceData.name = fallbackName;
+  }
+  return { sequenceData, warnings };
+}
+
+module.exports = { anyToJson, correctFileName, readTagged };

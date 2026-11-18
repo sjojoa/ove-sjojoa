@@ -519,7 +519,8 @@
     window.api.on("ove_find", focusFind);
     window.api.on("ove_warn", ({ title, messages }) => warn(title, messages));
 
-    addDoc(first);
+    // null when the first tab is already on its way from the main process
+    if (first) addDoc(first);
     watchDirty();
     // tell the main process it is safe to push tabs to this window now
     window.api.send("ove_rendererReady");
