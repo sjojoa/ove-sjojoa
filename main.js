@@ -23,6 +23,7 @@ const session = require("./src/main_utils/session");
 const taggedText = require("./src/features/taggedText");
 const pastedBases = require("./src/features/pastedBases");
 const sequenceFileFilters = require("./src/main_utils/sequenceFileFilters");
+const { anyToJson } = require("./src/main_utils/parseSequence");
 
 // Colours for the tagged-text exporter: a feature's colour is only worth
 // writing out when it is not simply the colour its type already gets.
@@ -171,7 +172,7 @@ async function getSeqJsonFromPath(_filePath) {
       if (warnings.length) sequenceData.__taggedWarnings = warnings;
       return sequenceData;
     }
-    const res = await bioParsers.anyToJson(data, { fileName });
+    const res = await anyToJson(data, fileName);
     return res[0].parsedSequence;
   } catch (error) {
     console.error(`error:`, error);
@@ -775,7 +776,7 @@ ipcMain.handle("ove_parseSequenceText", async (event, { text, name } = {}) => {
   }
 
   try {
-    const results = await bioParsers.anyToJson(raw, { fileName });
+    const results = await anyToJson(raw, fileName);
     const warnings = [];
     const sequences = [];
     let format = null;
