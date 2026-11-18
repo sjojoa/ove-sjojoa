@@ -125,6 +125,10 @@ async function openInTabOrWindow({ seqJson, filePath, preferWindow }) {
 // and registered the listener, so hold messages until it says it is ready.
 function sendTab(win, payload) {
   if (!win || win.isDestroyed()) return;
+  // Kept so a reloaded page can be given its tabs back: the page no longer
+  // carries its sequence in its own URL, so without this a reload leaves an
+  // empty window and the file it was showing simply gone.
+  (win.__oveSentTabs = win.__oveSentTabs || []).push(payload);
   if (win.__oveReady) win.webContents.send("ove_addTab", payload);
   else (win.__ovePendingTabs = win.__ovePendingTabs || []).push(payload);
 }
@@ -132,10 +136,15 @@ function sendTab(win, payload) {
 ipcMain.handle("ove_rendererReady", (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   if (!win) return;
+  const reloaded = win.__oveReady; // ready twice means the page was reloaded
   win.__oveReady = true;
   const queued = win.__ovePendingTabs || [];
   win.__ovePendingTabs = [];
-  queued.forEach((payload) => win.webContents.send("ove_addTab", payload));
+  // A reload wipes the renderer's tabs; send back what this window was given.
+  // Edits made since are gone either way -- they only ever lived in the page
+  // -- but the files it was showing come back rather than vanishing.
+  const toSend = queued.length || !reloaded ? queued : win.__oveSentTabs || [];
+  toSend.forEach((payload) => win.webContents.send("ove_addTab", payload));
   const messages = win.__ovePendingMessages || [];
   win.__ovePendingMessages = [];
   messages.forEach(({ channel, payload }) => win.webContents.send(channel, payload));

@@ -52,10 +52,11 @@ Owczarzy (2008) salt correction, and match Biopython's `Tm_NN` to within 0.001 �
 - **Per-feature colours** — a colour row in the Add/Edit Feature dialog, saved as a
   `/color=` qualifier so it survives a round trip through `.gb` and opens correctly elsewhere
 - **File → Open Recent** — last 10 files, ⌘1–⌘9, auto-pruned
-- **⌘J makes a primer** — upstream binds ⌘K to New Feature and ⌘L to New Part but left
-  New Primer with no key at all, which in a fork built around primer work is the wrong
-  one to be missing. ⌘J sits next to them, so the three annotations you can create are
-  j-k-l in a row.
+- **⌘R makes a primer, ⌘T makes a feature** — upstream left New Primer with no key at
+  all, which in a fork built around primer work is the wrong one of the three to be
+  missing. ⌘R was the View menu's Reload, which is gone: reloading a window throws away
+  every unsaved construct in it, so it is not a key worth keeping one stroke away from
+  ⌘T. Force Reload still does the job on ⌘⇧R. New Part keeps upstream's ⌘L.
 - **One File menu, in both places**
   ([`src/features/fileMenu.js`](src/features/fileMenu.js)) — New File, Open…, Open Recent
   and Reopen Last Closed Window are in the editor window's own File menu as well as the
@@ -232,6 +233,7 @@ keyboard ones are handled by this app's own Edit menu:
 | a primer created without a selection began with one stray base | the Bases field is seeded from the stretch of template the annotation covers, and with no selection that range is the caret — a single character, adopted by the form as the primer's real value, which had to be deleted before the oligo could be typed |
 | you could not see which way a primer pointed | primers drawn with their bases were given an arrowhead a fifth of a character wide, which at any normal zoom reads as a bevel rather than a point — the one thing a primer has to say at a glance |
 | an arrowhead could be longer than the annotation it points from | `arrowPointiness` scales the head without any cap, so a value above 1 puts the back of the arrow in front of its tip and draws a bowtie; nothing upstream passed one, so nothing upstream hit it |
+| reloading a window emptied it | the page carries only a note that a tab is coming, not the sequence itself, so a reload found the message already sent and opened nothing; the window now gets its tabs back |
 | a cancelled save still marked the sequence saved | OVE stamps its `lastSavedId` from a `.then()` that runs whether or not a file was written, so the save icon went quiet after you cancelled the dialog; the unsaved-changes guard keeps its own record per tab |
 
 ## Installing the app

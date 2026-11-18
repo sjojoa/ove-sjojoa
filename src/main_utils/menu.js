@@ -158,7 +158,10 @@ module.exports = function createMenu({
     {
       label: "View",
       submenu: [
-        { role: "reload" },
+        // Reload held Cmd+R, which now makes a primer (#24). Force Reload
+        // does the same job on Cmd+Shift+R, and is far harder to hit by
+        // accident -- which matters, because reloading a window throws away
+        // every unsaved construct in it.
         { role: "forcereload" },
         { role: "toggledevtools" },
         { type: "separator" },

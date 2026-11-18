@@ -250,14 +250,22 @@ const patches = [
     to: "  charWN = Math.min(arrowPointiness * charWN, width);",
   },
   {
-    // New Feature is mod+k and New Part is mod+l upstream; New Primer, the
-    // one of the three this fork is built around, had no key at all. mod+j
-    // sits next to them on the keyboard, so the three annotations you can
-    // create are j-k-l in a row, and it is one of the few combinations the
-    // editor, this app's menus and the browser all leave alone (#24).
-    name: "cmd+j creates a primer, next to cmd+k and cmd+l",
+    // New Primer had no key at all upstream -- in a fork built around primer
+    // work, the wrong one of the three to be missing. mod+r is the repo
+    // owner's pick; it was the View menu's Reload, which is removed in
+    // src/main_utils/menu.js so the key reaches the editor at all (#24).
+    name: "cmd+r creates a primer",
     from: "  newPrimer: {\n    handler: function handler(props) {\n      return props.handleNewPrimer();\n    },",
-    to: "  newPrimer: {\n    hotkey: \"mod+j\",\n    hotkeyProps: {\n      preventDefault: true\n    },\n    handler: function handler(props) {\n      return props.handleNewPrimer();\n    },",
+    to: "  newPrimer: {\n    hotkey: \"mod+r\",\n    hotkeyProps: {\n      preventDefault: true\n    },\n    handler: function handler(props) {\n      return props.handleNewPrimer();\n    },",
+  },
+  {
+    // mod+t for New Feature, asked for by the repo owner. Nothing held it:
+    // not the editor, not this app's menus, not the browser. The upstream
+    // mod+k goes with it -- one item, one key, so the menu says what the
+    // keyboard does (#24).
+    name: "cmd+t creates a feature",
+    from: "    hotkey: \"mod+k\",",
+    to: "    hotkey: \"mod+t\",",
   },
   {
     name: "alignment tool note reflects the built-in local aligner",
