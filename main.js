@@ -23,6 +23,7 @@ const session = require("./src/main_utils/session");
 const taggedText = require("./src/features/taggedText");
 const pastedBases = require("./src/features/pastedBases");
 const sequenceFileFilters = require("./src/main_utils/sequenceFileFilters");
+const { anyToJson, readTagged } = require("./src/main_utils/parseSequence");
 
 // Colours for the tagged-text exporter: a feature's colour is only worth
 // writing out when it is not simply the colour its type already gets.
@@ -147,35 +148,29 @@ const pointInBounds = (b, x, y) =>
 rebuildMenu();
 
 async function getSeqJsonFromPath(_filePath) {
-  const filePath = _filePath || process.argv[1];
-  // const filePath = _filePath || process.argv[2] || process.argv[1];
-  if (filePath === ".") return;
+  const filePath = _filePath;
+  if (!filePath || filePath === ".") return;
   const data = fs.readFileSync(path.resolve(filePath));
   //open, read, handle file
   if (!data) return;
   const fileName = filePath.replace(/^.*[\\/]/, "");
   try {
-    if (fileName.endsWith(".json") && (data.sequence || data.proteinSequence)) {
-      return data;
+    const tagged = readTagged(taggedText, data.toString("utf8"), fileName.replace(/\.[^.]*$/, ""));
+    if (tagged) {
+      if (tagged.warnings.length) tagged.sequenceData.__taggedWarnings = tagged.warnings;
+      return tagged.sequenceData;
     }
-    // The lab's inline-tagged format: bio-parsers would read it as one long
-    // run of bases with the tags treated as garbage, so catch it first. A .txt
-    // file is only tagged text if it actually carries tag pairs; a plain
-    // sequence in a .txt still goes to bio-parsers.
-    const asText = data.toString("utf8");
-    if (taggedText.looksTagged(asText)) {
-      const { sequenceData, warnings } = taggedText.taggedToSequenceData(asText);
-      if (!sequenceData.name || sequenceData.name === "Untitled Sequence") {
-        sequenceData.name = fileName.replace(/\.[^.]*$/, "");
-      }
-      if (warnings.length) sequenceData.__taggedWarnings = warnings;
-      return sequenceData;
+    const res = await anyToJson(data, fileName);
+    // The parser says why it refused a file ("Wrong format for a SnapGene
+    // file", "Import Error: Invalid File"); dropping that leaves the user with
+    // nothing but "could not open this file".
+    if (!res[0] || !res[0].parsedSequence) {
+      throw new Error((res[0] && res[0].messages || []).join("; ") || "no sequence in this file");
     }
-    const res = await bioParsers.anyToJson(data, { fileName });
     return res[0].parsedSequence;
   } catch (error) {
     console.error(`error:`, error);
-    return {};
+    throw error;
   }
 }
 
@@ -190,7 +185,7 @@ function waitTillAppReady() {
   });
 }
 
-async function createWindow({ initialSeqJson, filePath, windowToUse, position } = {}) {
+async function createWindow({ initialSeqJson, filePath, position } = {}) {
   await waitTillAppReady();
   //if no windowVars are passed then we should
   // Create the browser window.
@@ -220,20 +215,18 @@ async function createWindow({ initialSeqJson, filePath, windowToUse, position } 
   // a tab torn off with the mouse opens where it was dropped
   const origin = position || { x: mainWindowState.x, y: mainWindowState.y };
 
-  let newWindow =
-    windowToUse ||
-    new BrowserWindow({
-      x: origin.x,
-      y: origin.y,
-      width: mainWindowState.width,
-      height: mainWindowState.height,
-      show: false,
-      webPreferences: {
-        contextIsolation: true,
-        // nodeIntegration: true, //we don't want to enable this because it is a security risk and slows down the app
-        preload: path.join(__dirname, "src/preload.js"),
-      },
-    });
+  let newWindow = new BrowserWindow({
+    x: origin.x,
+    y: origin.y,
+    width: mainWindowState.width,
+    height: mainWindowState.height,
+    show: false,
+    webPreferences: {
+      contextIsolation: true,
+      // nodeIntegration: true, //we don't want to enable this because it is a security risk and slows down the app
+      preload: path.join(__dirname, "src/preload.js"),
+    },
+  });
 
   newWindow.once("ready-to-show", () => {
     newWindow.show();
@@ -244,16 +237,21 @@ async function createWindow({ initialSeqJson, filePath, windowToUse, position } 
   // and restore the maximized or full screen state
   mainWindowState.manage(newWindow);
 
-  !windowToUse &&
-    windows.push({
-      bw: newWindow,
-      //set a __filePath property so we can reference this if a user tries to open the same file multiple times
-      __filePath: filePath,
-    });
-console.log(`initialSeqJson:`,initialSeqJson)
-  newWindow.loadFile("index.html", {
-    query: { initialSeqJson: JSON.stringify(initialSeqJson), filePath },
+  windows.push({
+    bw: newWindow,
+    //set a __filePath property so we can reference this if a user tries to open the same file multiple times
+    __filePath: filePath,
   });
+  // The sequence used to travel in the page's own URL, as JSON. That meant
+  // escaping and re-parsing every base twice, and a large enough sequence
+  // would have run into the browser's limit on how long a URL can be. It goes
+  // the way every other tab already goes instead -- a message, queued until
+  // the page says it is ready -- and the query only says that one is coming,
+  // so the window does not open an empty scratch tab beside it.
+  newWindow.loadFile("index.html", {
+    query: initialSeqJson ? { pending: "1" } : {},
+  });
+  if (initialSeqJson) sendTab(newWindow, { seqJson: initialSeqJson, filePath });
 
   // Open the DevTools.
   // newWindow.webContents.openDevTools()
@@ -488,12 +486,6 @@ app.on("activate", function () {
   }
 });
 
-// ipcMain.on("restart_app", () => {
-//   setImmediate(() => {
-//     autoUpdater.quitAndInstall();
-//   });
-// });
-
 /*  HANDLE THE API CALLS FROM THE RENDERER PROCESS  */
 
 ipcMain.handle(
@@ -526,7 +518,17 @@ ipcMain.handle(
     } else {
       formattedSeqString = bioParsers.jsonToGenbank(sequenceDataToSave);
     }
-    fs.writeFileSync(filePath, formattedSeqString);
+    // writeFileSync truncates first: a crash or a full disk between the
+    // truncate and the write leaves the only copy of a plasmid empty. Write
+    // beside it and rename, which is atomic on the same disk.
+    const tmpPath = `${filePath}.ove-tmp`;
+    try {
+      fs.writeFileSync(tmpPath, formattedSeqString);
+      fs.renameSync(tmpPath, filePath);
+    } catch (e) {
+      try { fs.unlinkSync(tmpPath); } catch (e2) { /* nothing to clean up */ }
+      throw e;
+    }
     noteRecentFile(filePath);
     // Save and Save As both retarget the tab, so the window's record of which
     // file it is showing follows either way.
@@ -743,12 +745,9 @@ ipcMain.handle("ove_parseSequenceText", async (event, { text, name } = {}) => {
   if (!raw.trim()) return { sequences: [], warnings: [], format: null };
   const fileName = name || "pasted";
 
-  if (taggedText.looksTagged(raw)) {
-    const { sequenceData, warnings } = taggedText.taggedToSequenceData(raw);
-    if (!sequenceData.name || sequenceData.name === "Untitled Sequence") {
-      sequenceData.name = fileName;
-    }
-    return { sequences: [sequenceData], warnings, format: "tagged text" };
+  const tagged = readTagged(taggedText, raw, fileName);
+  if (tagged) {
+    return { sequences: [tagged.sequenceData], warnings: tagged.warnings, format: "tagged text" };
   }
 
   // Bare bases, which is most pastes. See src/features/pastedBases.js for why
@@ -775,7 +774,7 @@ ipcMain.handle("ove_parseSequenceText", async (event, { text, name } = {}) => {
   }
 
   try {
-    const results = await bioParsers.anyToJson(raw, { fileName });
+    const results = await anyToJson(raw, fileName);
     const warnings = [];
     const sequences = [];
     let format = null;
@@ -813,10 +812,14 @@ ipcMain.handle("ove_openFilePicker", async (event) => {
 });
 
 ipcMain.handle("ove_showSaveDialog", async (event, opts) => {
-  return dialog.showSaveDialogSync(
-    BrowserWindow.fromWebContents(event.sender),
-    opts
-  );
+  // A "~/..." default path is not expanded by Electron -- it becomes a folder
+  // literally named "~", relative to wherever the app was started -- so the
+  // home-relative part is resolved here, where app.getPath exists.
+  const o = { ...opts };
+  if (typeof o.defaultPath === "string" && o.defaultPath.startsWith("~/")) {
+    o.defaultPath = path.join(app.getPath("home"), o.defaultPath.slice(2));
+  }
+  return dialog.showSaveDialogSync(BrowserWindow.fromWebContents(event.sender), o);
 });
 
 /*  **************************************************  */
