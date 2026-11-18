@@ -28,3 +28,35 @@ describe("a .dna file that is really GenBank text", () => {
     assert.strictEqual(correctFileName("ACGTLOCUS ACGT", "p.dna"), "p.dna");
   });
 });
+
+const { readTagged } = require("../src/main_utils/parseSequence.js");
+
+// A stand-in for src/features/taggedText.js: this is about the shared
+// wrapper, not about the format itself (taggedText has its own tests).
+const stub = (looks, out) => ({
+  looksTagged: () => looks,
+  taggedToSequenceData: () => out,
+});
+
+describe("reading the lab's tagged format, from a file or a paste", () => {
+  it("passes untagged text through, so bio-parsers still gets it", () => {
+    assert.strictEqual(readTagged(stub(false), "ACGT", "x"), null);
+  });
+
+  it("keeps the name the text carries", () => {
+    const got = readTagged(stub(true, { sequenceData: { name: "pUC19" }, warnings: [] }), "t", "fallback");
+    assert.strictEqual(got.sequenceData.name, "pUC19");
+  });
+
+  it("falls back to the given name when the text has none", () => {
+    [undefined, "", "Untitled Sequence"].forEach((name) => {
+      const got = readTagged(stub(true, { sequenceData: { name }, warnings: [] }), "t", "fallback");
+      assert.strictEqual(got.sequenceData.name, "fallback");
+    });
+  });
+
+  it("hands back the warnings rather than dropping them", () => {
+    const got = readTagged(stub(true, { sequenceData: {}, warnings: ["unclosed tag"] }), "t", "x");
+    assert.deepStrictEqual(got.warnings, ["unclosed tag"]);
+  });
+});

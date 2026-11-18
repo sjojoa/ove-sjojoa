@@ -23,7 +23,7 @@ const session = require("./src/main_utils/session");
 const taggedText = require("./src/features/taggedText");
 const pastedBases = require("./src/features/pastedBases");
 const sequenceFileFilters = require("./src/main_utils/sequenceFileFilters");
-const { anyToJson } = require("./src/main_utils/parseSequence");
+const { anyToJson, readTagged } = require("./src/main_utils/parseSequence");
 
 // Colours for the tagged-text exporter: a feature's colour is only worth
 // writing out when it is not simply the colour its type already gets.
@@ -155,18 +155,10 @@ async function getSeqJsonFromPath(_filePath) {
   if (!data) return;
   const fileName = filePath.replace(/^.*[\\/]/, "");
   try {
-    // The lab's inline-tagged format: bio-parsers would read it as one long
-    // run of bases with the tags treated as garbage, so catch it first. A .txt
-    // file is only tagged text if it actually carries tag pairs; a plain
-    // sequence in a .txt still goes to bio-parsers.
-    const asText = data.toString("utf8");
-    if (taggedText.looksTagged(asText)) {
-      const { sequenceData, warnings } = taggedText.taggedToSequenceData(asText);
-      if (!sequenceData.name || sequenceData.name === "Untitled Sequence") {
-        sequenceData.name = fileName.replace(/\.[^.]*$/, "");
-      }
-      if (warnings.length) sequenceData.__taggedWarnings = warnings;
-      return sequenceData;
+    const tagged = readTagged(taggedText, data.toString("utf8"), fileName.replace(/\.[^.]*$/, ""));
+    if (tagged) {
+      if (tagged.warnings.length) tagged.sequenceData.__taggedWarnings = tagged.warnings;
+      return tagged.sequenceData;
     }
     const res = await anyToJson(data, fileName);
     // The parser says why it refused a file ("Wrong format for a SnapGene
@@ -250,9 +242,16 @@ async function createWindow({ initialSeqJson, filePath, position } = {}) {
     //set a __filePath property so we can reference this if a user tries to open the same file multiple times
     __filePath: filePath,
   });
+  // The sequence used to travel in the page's own URL, as JSON. That meant
+  // escaping and re-parsing every base twice, and a large enough sequence
+  // would have run into the browser's limit on how long a URL can be. It goes
+  // the way every other tab already goes instead -- a message, queued until
+  // the page says it is ready -- and the query only says that one is coming,
+  // so the window does not open an empty scratch tab beside it.
   newWindow.loadFile("index.html", {
-    query: { initialSeqJson: JSON.stringify(initialSeqJson), filePath },
+    query: initialSeqJson ? { pending: "1" } : {},
   });
+  if (initialSeqJson) sendTab(newWindow, { seqJson: initialSeqJson, filePath });
 
   // Open the DevTools.
   // newWindow.webContents.openDevTools()
@@ -746,12 +745,9 @@ ipcMain.handle("ove_parseSequenceText", async (event, { text, name } = {}) => {
   if (!raw.trim()) return { sequences: [], warnings: [], format: null };
   const fileName = name || "pasted";
 
-  if (taggedText.looksTagged(raw)) {
-    const { sequenceData, warnings } = taggedText.taggedToSequenceData(raw);
-    if (!sequenceData.name || sequenceData.name === "Untitled Sequence") {
-      sequenceData.name = fileName;
-    }
-    return { sequences: [sequenceData], warnings, format: "tagged text" };
+  const tagged = readTagged(taggedText, raw, fileName);
+  if (tagged) {
+    return { sequences: [tagged.sequenceData], warnings: tagged.warnings, format: "tagged text" };
   }
 
   // Bare bases, which is most pastes. See src/features/pastedBases.js for why

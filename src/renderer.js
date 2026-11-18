@@ -57,15 +57,7 @@ async function saveDoc(doc, { isSaveAs = false, sequenceDataToSave, onSuccessCal
     const live = doc.editor ? doc.editor.getState().sequenceData : doc.seqJson;
     sequenceDataToSave = JSON.parse(JSON.stringify(live || {}));
   }
-  const filters = [
-    { name: "Genbank", extensions: ["gb"] },
-    { name: "Fasta", extensions: ["fasta"] },
-    { name: "TeselaGen JSON", extensions: ["json"] },
-    { name: "Bed", extensions: ["bed"] },
-    // the lab's inline-tagged format: features written between the bases,
-    // which is what gets pasted into notes and protocols
-    { name: "Tagged text", extensions: ["txt"] },
-  ];
+  const filters = window.oveSequenceFileFilters.SAVE_FILTERS;
 
   let newFilePath = doc.filePath;
   if (isSaveAs || !newFilePath) {
@@ -89,8 +81,9 @@ async function saveDoc(doc, { isSaveAs = false, sequenceDataToSave, onSuccessCal
 
   // Only the extension at the end: replacing the first match anywhere turned
   // "my.fasta.notes.gb" into "my.notes".
-  const EXT = new RegExp(`\\.(${filters.map(({ extensions }) => extensions[0]).join("|")})$`, "i");
-  sequenceDataToSave.name = newFilePath.slice(newFilePath.lastIndexOf("/") + 1).replace(EXT, "");
+  sequenceDataToSave.name = newFilePath
+    .slice(newFilePath.lastIndexOf("/") + 1)
+    .replace(window.oveSequenceFileFilters.SAVE_EXT, "");
 
   doc.filePath = newFilePath;
   window.oveTabs.renameDoc(doc.id, sequenceDataToSave.name);
@@ -351,8 +344,6 @@ window.oveMakeEditor = function oveMakeEditor(container, doc, restoring) {
 
 window.oveSetWindowTitle = setWindowTitle;
 
-// Open whatever the main process passed us as the window's first tab.
-window.oveTabs.init({
-  seqJson: window.initialSeqJson || { circular: true },
-  filePath: window.filePath,
-});
+// A window opened on a file gets it as a queued "ove_addTab"; one opened with
+// nothing starts on an empty scratch tab.
+window.oveTabs.init(window.oveHasPendingTab ? null : { seqJson: { circular: true } });
