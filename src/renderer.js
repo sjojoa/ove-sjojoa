@@ -60,15 +60,7 @@ async function saveDoc(doc, { isSaveAs = false, sequenceDataToSave, onSuccessCal
     const live = doc.editor ? doc.editor.getState().sequenceData : doc.seqJson;
     sequenceDataToSave = JSON.parse(JSON.stringify(live || {}));
   }
-  const filters = [
-    { name: "Genbank", extensions: ["gb"] },
-    { name: "Fasta", extensions: ["fasta"] },
-    { name: "TeselaGen JSON", extensions: ["json"] },
-    { name: "Bed", extensions: ["bed"] },
-    // the lab's inline-tagged format: features written between the bases,
-    // which is what gets pasted into notes and protocols
-    { name: "Tagged text", extensions: ["txt"] },
-  ];
+  const filters = window.oveSequenceFileFilters.SAVE_FILTERS;
 
   let newFilePath = doc.filePath;
   if (isSaveAs || !newFilePath) {
@@ -90,11 +82,11 @@ async function saveDoc(doc, { isSaveAs = false, sequenceDataToSave, onSuccessCal
     }
   }
 
-  sequenceDataToSave.name = newFilePath.slice(newFilePath.lastIndexOf("/") + 1);
-  filters.forEach(({ extensions }) => {
-    //strip the extension from the name
-    sequenceDataToSave.name = sequenceDataToSave.name.replace(`.${extensions[0]}`, "");
-  });
+  // Only the extension at the end: replacing the first match anywhere turned
+  // "my.fasta.notes.gb" into "my.notes".
+  sequenceDataToSave.name = newFilePath
+    .slice(newFilePath.lastIndexOf("/") + 1)
+    .replace(window.oveSequenceFileFilters.SAVE_EXT, "");
 
   doc.filePath = newFilePath;
   window.oveTabs.renameDoc(doc.id, sequenceDataToSave.name);
@@ -107,11 +99,19 @@ async function saveDoc(doc, { isSaveAs = false, sequenceDataToSave, onSuccessCal
     });
   }
 
-  window.api.send("ove_saveFile", {
-    filePath: newFilePath,
-    previousFilePath,
-    sequenceDataToSave,
-  });
+  // Wait for the write. Without this a failed one -- a read-only file, a full
+  // disk, a network folder that went away -- still got a green toast and a
+  // tab marked clean, so the guard let the work be closed away.
+  try {
+    await window.api.send("ove_saveFile", {
+      filePath: newFilePath,
+      previousFilePath,
+      sequenceDataToSave,
+    });
+  } catch (error) {
+    window.toastr.error(`Could not save to ${newFilePath}: ${error.message}`, { timeOut: 0 });
+    return false;
+  }
   // This tab is now clean as far as the guard is concerned. OVE keeps its
   // own lastSavedId, but it stamps it from a .then() that runs whether or
   // not a file was written, so cancelling a save marks a sequence saved
@@ -354,8 +354,6 @@ window.oveMakeEditor = function oveMakeEditor(container, doc, restoring) {
 
 window.oveSetWindowTitle = setWindowTitle;
 
-// Open whatever the main process passed us as the window's first tab.
-window.oveTabs.init({
-  seqJson: window.initialSeqJson || { circular: true },
-  filePath: window.filePath,
-});
+// A window opened on a file gets it as a queued "ove_addTab"; one opened with
+// nothing starts on an empty scratch tab.
+window.oveTabs.init(window.oveHasPendingTab ? null : { seqJson: { circular: true } });

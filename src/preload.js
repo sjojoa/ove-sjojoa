@@ -35,29 +35,11 @@ contextBridge.exposeInMainWorld("api", {
   },
 });
 
-// Add the initial seq data to the renderer window
-
+// Whether a first tab is on its way as a message. If it is, the renderer must
+// not open an empty scratch tab in front of it; the sequence itself arrives
+// through "ove_addTab" like every other tab.
 const urlParams = new URLSearchParams(global.location.search);
-
-try {
-  const datastring = urlParams.get('initialSeqJson');
-  if (datastring) {
-    const data = JSON.parse(datastring);
-    contextBridge.exposeInMainWorld("initialSeqJson", data);
-  }
-} catch (error) {
-  console.error(`error with initialSeqJson:`, error);
-}
-// Add the filepath to the renderer window
-// filePath arrives as a plain string in the query (not JSON), so use it as-is.
-try {
-  const datastring = urlParams.get("filePath");
-  if (datastring && datastring !== "undefined") {
-    contextBridge.exposeInMainWorld("filePath", datastring);
-  }
-} catch (error) {
-  console.error(`error with filePath:`, error);
-}
+contextBridge.exposeInMainWorld("oveHasPendingTab", urlParams.get("pending") === "1");
 
 // function getParameterByName(name, url ) {
 //   name = name.replace(/[\[\]]/g, '\\$&');
