@@ -87,11 +87,10 @@ async function saveDoc(doc, { isSaveAs = false, sequenceDataToSave, onSuccessCal
     }
   }
 
-  sequenceDataToSave.name = newFilePath.slice(newFilePath.lastIndexOf("/") + 1);
-  filters.forEach(({ extensions }) => {
-    //strip the extension from the name
-    sequenceDataToSave.name = sequenceDataToSave.name.replace(`.${extensions[0]}`, "");
-  });
+  // Only the extension at the end: replacing the first match anywhere turned
+  // "my.fasta.notes.gb" into "my.notes".
+  const EXT = new RegExp(`\\.(${filters.map(({ extensions }) => extensions[0]).join("|")})$`, "i");
+  sequenceDataToSave.name = newFilePath.slice(newFilePath.lastIndexOf("/") + 1).replace(EXT, "");
 
   doc.filePath = newFilePath;
   window.oveTabs.renameDoc(doc.id, sequenceDataToSave.name);
@@ -104,10 +103,18 @@ async function saveDoc(doc, { isSaveAs = false, sequenceDataToSave, onSuccessCal
     });
   }
 
-  window.api.send("ove_saveFile", {
-    filePath: newFilePath,
-    sequenceDataToSave,
-  });
+  // Wait for the write. Without this a failed one -- a read-only file, a full
+  // disk, a network folder that went away -- still got a green toast and a
+  // tab marked clean, so the guard let the work be closed away.
+  try {
+    await window.api.send("ove_saveFile", {
+      filePath: newFilePath,
+      sequenceDataToSave,
+    });
+  } catch (error) {
+    window.toastr.error(`Could not save to ${newFilePath}: ${error.message}`, { timeOut: 0 });
+    return false;
+  }
   // This tab is now clean as far as the guard is concerned. OVE keeps its
   // own lastSavedId, but it stamps it from a .then() that runs whether or
   // not a file was written, so cancelling a save marks a sequence saved
