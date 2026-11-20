@@ -310,6 +310,12 @@ freshly downloaded `open-vector-editor` on every install; it is idempotent and o
 (never fails) if a target string is missing, which is what you would see after bumping
 `open-vector-editor` past the pinned `18.3.6`.
 
+`ve-range-utils` and `ve-sequence-utils` look unused -- nothing in this repo imports
+them -- but `bio-parsers` requires both and declares neither, relying on them being
+hoisted from here. Remove them and the app still runs from source, where they are still
+on disk, and the packaged build has no window at all: `require("bio-parsers")` throws
+before the first window is made. Leave them.
+
 ```bash
 yarn test            # unit tests
 yarn lint            # eslint

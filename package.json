@@ -91,7 +91,9 @@
     "bio-parsers": "^9.0.1",
     "electron-window-state": "^5.0.3",
     "open-vector-editor": "18.3.6",
-    "ove-auto-annotate": "^0.0.5"
+    "ove-auto-annotate": "^0.0.5",
+    "ve-range-utils": "^2.6.6",
+    "ve-sequence-utils": "^5.2.8"
   },
   "devDependencies": {
     "electron": "22.0.0",
