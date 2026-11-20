@@ -72,7 +72,10 @@ Owczarzy (2008) salt correction, and match Biopython's `Tm_NN` to within 0.001 �
   commonest reason to draw a feature, and the dialog opened on `misc_feature` every
   time, so a coding sequence reached the file mislabelled whenever that was forgotten.
   A selection that starts on a start codon, reads a whole number of codons with no stop
-  inside and ends on one, opens as CDS; anything else keeps OVE's default. Works on the
+  inside and ends on one, opens as CDS; so does one made by picking amino acids off a
+  translation row — codon-aligned to a reading frame you have displayed, coding all the
+  way to the end. Anything else keeps OVE's default: with no frame on screen a length
+  that merely divides by three would be called coding one time in three. Works on the
   bottom strand and across the origin of a plasmid.
 - **Per-feature colours** — a colour row in the Add/Edit Feature dialog, saved as a
   `/color=` qualifier so it survives a round trip through `.gb` and opens correctly elsewhere

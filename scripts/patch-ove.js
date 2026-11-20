@@ -273,9 +273,9 @@ const patches = [
     // written to the file as misc_feature whenever someone forgot to change
     // it. src/features/orfFeatureType.js decides; it returns null for
     // anything that is not a clean ORF, which leaves OVE's default alone.
-    name: "a feature drawn over an ORF opens as a CDS",
+    name: "a feature over an ORF, or over amino acids, opens as a CDS",
     from: "        showAddOrEditAnnotationDialog({\n          type: key.toLowerCase(),\n          annotation: withEditorProps_extends({}, rangeToUse, {\n            forward: !(selectionLayer.forward === false)\n          })\n        });",
-    to: "        var orfType = key === \"Feature\" && window.oveOrfFeatureType\n          ? window.oveOrfFeatureType.typeFor({\n              sequence: sequenceData.sequence,\n              start: rangeToUse.start,\n              end: rangeToUse.end,\n              forward: !(selectionLayer.forward === false),\n              circular: sequenceData.circular\n            })\n          : null;\n        showAddOrEditAnnotationDialog({\n          type: key.toLowerCase(),\n          annotation: withEditorProps_extends({}, rangeToUse, {\n            forward: !(selectionLayer.forward === false)\n          }, orfType ? { type: orfType } : {})\n        });",
+    to: "        var orfType = key === \"Feature\" && window.oveOrfFeatureType\n          ? window.oveOrfFeatureType.typeFor({\n              sequence: sequenceData.sequence,\n              start: rangeToUse.start,\n              end: rangeToUse.end,\n              forward: !(selectionLayer.forward === false),\n              circular: sequenceData.circular,\n              frames: Object.keys(props.frameTranslations || {}).filter(function (f) { return props.frameTranslations[f]; }).map(Number)\n            })\n          : null;\n        showAddOrEditAnnotationDialog({\n          type: key.toLowerCase(),\n          annotation: withEditorProps_extends({}, rangeToUse, {\n            forward: !(selectionLayer.forward === false)\n          }, orfType ? { type: orfType } : {})\n        });",
   },
   {
     name: "alignment tool note reflects the built-in local aligner",
