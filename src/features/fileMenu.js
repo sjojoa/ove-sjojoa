@@ -69,6 +69,13 @@
         disabled: !state.canReopenClosedWindow,
         onClick: () => send("ove_menuReopenLastClosedWindow"),
       },
+      {
+        // The saved-version history lives in the file, so these are the ways
+        // to keep the file from growing without bound (#6).
+        text: "Version History",
+        icon: "history",
+        submenu: window.oveHistory ? window.oveHistory.submenu() : [],
+      },
       { divider: "" },
     ];
   }

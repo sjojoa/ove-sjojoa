@@ -5,11 +5,12 @@ const vm = require("vm");
 
 // fileMenu.js is a browser script that hangs itself off window; load it into a
 // sandbox with just enough of a window to run.
-function load(api) {
+function load(api, oveHistory) {
   const src = fs.readFileSync(path.join(__dirname, "../src/features/fileMenu.js"), "utf8");
   const sent = [];
   const listeners = {};
   const window = {
+    oveHistory,
     api: api === undefined
       ? {
           send: (channel, arg) => sent.push([channel, arg]),
@@ -40,15 +41,34 @@ describe("the editor window's File menu (#21)", () => {
     const out = api.menuFilter(menu());
     const file = byText(out, "File").submenu;
     const texts = file.map((i) => (typeof i === "string" ? i : i.text));
-    assert.deepStrictEqual(plain(texts.slice(0, 4)), [
+    assert.deepStrictEqual(plain(texts.slice(0, 5)), [
       "New File",
       "Open…",
       "Open Recent",
       "Reopen Last Closed Window",
+      "Version History",
     ]);
     // a divider, then everything that was already there, untouched and in order
-    assert.strictEqual(file[4].divider, "");
-    assert.deepStrictEqual(plain(file.slice(5)), ["renameSequence", "save", "saveAs"]);
+    assert.strictEqual(file[5].divider, "");
+    assert.deepStrictEqual(plain(file.slice(6)), ["renameSequence", "save", "saveAs"]);
+  });
+
+  it("carries the version-history items when that module is loaded", () => {
+    const { api } = load(undefined, {
+      submenu: () => [{ text: "Delete All History…", onClick: () => {} }],
+    });
+    const file = byText(api.menuFilter(menu()), "File").submenu;
+    const vh = byText(file, "Version History");
+    assert.deepStrictEqual(
+      vh.submenu.map((i) => i.text),
+      ["Delete All History…"]
+    );
+  });
+
+  it("shows an empty version-history submenu rather than failing without that module", () => {
+    const { api } = load();
+    const vh = byText(byText(api.menuFilter(menu()), "File").submenu, "Version History");
+    assert.deepStrictEqual(plain(vh.submenu), []);
   });
 
   it("leaves every other menu alone", () => {

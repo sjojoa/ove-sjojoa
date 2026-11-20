@@ -20,9 +20,12 @@ const closedWindows = [];
 const REOPEN_DEPTH = 10;
 const recentFiles = require("./src/main_utils/recentFiles");
 const session = require("./src/main_utils/session");
+const history = require("./src/main_utils/history.js");
+const os = require("os");
 const taggedText = require("./src/features/taggedText");
 const pastedBases = require("./src/features/pastedBases");
 const sequenceFileFilters = require("./src/main_utils/sequenceFileFilters");
+const { anyToJson, readTagged } = require("./src/main_utils/parseSequence");
 
 // Colours for the tagged-text exporter: a feature's colour is only worth
 // writing out when it is not simply the colour its type already gets.
@@ -44,6 +47,7 @@ const rebuildMenu = () => {
     openPath,
     reopenLastClosedWindow: () => reopenLastClosedWindow(),
     canReopenClosedWindow: () => canReopenClosedWindow(),
+    askWindowForHistory: (opts) => askWindowForHistory(opts),
   });
   // The editor window has its own File menu, built in the renderer, which
   // carries the same items (#21). It cannot wait on IPC while rendering, so
@@ -124,6 +128,10 @@ async function openInTabOrWindow({ seqJson, filePath, preferWindow }) {
 // and registered the listener, so hold messages until it says it is ready.
 function sendTab(win, payload) {
   if (!win || win.isDestroyed()) return;
+  // Kept so a reloaded page can be given its tabs back: the page no longer
+  // carries its sequence in its own URL, so without this a reload leaves an
+  // empty window and the file it was showing simply gone.
+  (win.__oveSentTabs = win.__oveSentTabs || []).push(payload);
   if (win.__oveReady) win.webContents.send("ove_addTab", payload);
   else (win.__ovePendingTabs = win.__ovePendingTabs || []).push(payload);
 }
@@ -131,10 +139,15 @@ function sendTab(win, payload) {
 ipcMain.handle("ove_rendererReady", (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   if (!win) return;
+  const reloaded = win.__oveReady; // ready twice means the page was reloaded
   win.__oveReady = true;
   const queued = win.__ovePendingTabs || [];
   win.__ovePendingTabs = [];
-  queued.forEach((payload) => win.webContents.send("ove_addTab", payload));
+  // A reload wipes the renderer's tabs; send back what this window was given.
+  // Edits made since are gone either way -- they only ever lived in the page
+  // -- but the files it was showing come back rather than vanishing.
+  const toSend = queued.length || !reloaded ? queued : win.__oveSentTabs || [];
+  toSend.forEach((payload) => win.webContents.send("ove_addTab", payload));
   const messages = win.__ovePendingMessages || [];
   win.__ovePendingMessages = [];
   messages.forEach(({ channel, payload }) => win.webContents.send(channel, payload));
@@ -147,35 +160,31 @@ const pointInBounds = (b, x, y) =>
 rebuildMenu();
 
 async function getSeqJsonFromPath(_filePath) {
-  const filePath = _filePath || process.argv[1];
-  // const filePath = _filePath || process.argv[2] || process.argv[1];
-  if (filePath === ".") return;
+  const filePath = _filePath;
+  if (!filePath || filePath === ".") return;
   const data = fs.readFileSync(path.resolve(filePath));
   //open, read, handle file
   if (!data) return;
   const fileName = filePath.replace(/^.*[\\/]/, "");
   try {
-    if (fileName.endsWith(".json") && (data.sequence || data.proteinSequence)) {
-      return data;
+    const tagged = readTagged(taggedText, data.toString("utf8"), fileName.replace(/\.[^.]*$/, ""));
+    if (tagged) {
+      if (tagged.warnings.length) tagged.sequenceData.__taggedWarnings = tagged.warnings;
+      return tagged.sequenceData;
     }
-    // The lab's inline-tagged format: bio-parsers would read it as one long
-    // run of bases with the tags treated as garbage, so catch it first. A .txt
-    // file is only tagged text if it actually carries tag pairs; a plain
-    // sequence in a .txt still goes to bio-parsers.
-    const asText = data.toString("utf8");
-    if (taggedText.looksTagged(asText)) {
-      const { sequenceData, warnings } = taggedText.taggedToSequenceData(asText);
-      if (!sequenceData.name || sequenceData.name === "Untitled Sequence") {
-        sequenceData.name = fileName.replace(/\.[^.]*$/, "");
-      }
-      if (warnings.length) sequenceData.__taggedWarnings = warnings;
-      return sequenceData;
+    const res = await anyToJson(data, fileName);
+    // The parser says why it refused a file ("Wrong format for a SnapGene
+    // file", "Import Error: Invalid File"); dropping that leaves the user with
+    // nothing but "could not open this file".
+    if (!res[0] || !res[0].parsedSequence) {
+      throw new Error((res[0] && res[0].messages || []).join("; ") || "no sequence in this file");
     }
-    const res = await bioParsers.anyToJson(data, { fileName });
-    return res[0].parsedSequence;
+    // The saved-version history rides along in a comment; the editor must
+    // never see it (#6).
+    return history.strip(res[0].parsedSequence);
   } catch (error) {
     console.error(`error:`, error);
-    return {};
+    throw error;
   }
 }
 
@@ -190,7 +199,7 @@ function waitTillAppReady() {
   });
 }
 
-async function createWindow({ initialSeqJson, filePath, windowToUse, position } = {}) {
+async function createWindow({ initialSeqJson, filePath, position } = {}) {
   await waitTillAppReady();
   //if no windowVars are passed then we should
   // Create the browser window.
@@ -220,20 +229,18 @@ async function createWindow({ initialSeqJson, filePath, windowToUse, position } 
   // a tab torn off with the mouse opens where it was dropped
   const origin = position || { x: mainWindowState.x, y: mainWindowState.y };
 
-  let newWindow =
-    windowToUse ||
-    new BrowserWindow({
-      x: origin.x,
-      y: origin.y,
-      width: mainWindowState.width,
-      height: mainWindowState.height,
-      show: false,
-      webPreferences: {
-        contextIsolation: true,
-        // nodeIntegration: true, //we don't want to enable this because it is a security risk and slows down the app
-        preload: path.join(__dirname, "src/preload.js"),
-      },
-    });
+  let newWindow = new BrowserWindow({
+    x: origin.x,
+    y: origin.y,
+    width: mainWindowState.width,
+    height: mainWindowState.height,
+    show: false,
+    webPreferences: {
+      contextIsolation: true,
+      // nodeIntegration: true, //we don't want to enable this because it is a security risk and slows down the app
+      preload: path.join(__dirname, "src/preload.js"),
+    },
+  });
 
   newWindow.once("ready-to-show", () => {
     newWindow.show();
@@ -244,16 +251,21 @@ async function createWindow({ initialSeqJson, filePath, windowToUse, position } 
   // and restore the maximized or full screen state
   mainWindowState.manage(newWindow);
 
-  !windowToUse &&
-    windows.push({
-      bw: newWindow,
-      //set a __filePath property so we can reference this if a user tries to open the same file multiple times
-      __filePath: filePath,
-    });
-console.log(`initialSeqJson:`,initialSeqJson)
-  newWindow.loadFile("index.html", {
-    query: { initialSeqJson: JSON.stringify(initialSeqJson), filePath },
+  windows.push({
+    bw: newWindow,
+    //set a __filePath property so we can reference this if a user tries to open the same file multiple times
+    __filePath: filePath,
   });
+  // The sequence used to travel in the page's own URL, as JSON. That meant
+  // escaping and re-parsing every base twice, and a large enough sequence
+  // would have run into the browser's limit on how long a URL can be. It goes
+  // the way every other tab already goes instead -- a message, queued until
+  // the page says it is ready -- and the query only says that one is coming,
+  // so the window does not open an empty scratch tab beside it.
+  newWindow.loadFile("index.html", {
+    query: initialSeqJson ? { pending: "1" } : {},
+  });
+  if (initialSeqJson) sendTab(newWindow, { seqJson: initialSeqJson, filePath });
 
   // Open the DevTools.
   // newWindow.webContents.openDevTools()
@@ -488,20 +500,137 @@ app.on("activate", function () {
   }
 });
 
-// ipcMain.on("restart_app", () => {
-//   setImmediate(() => {
-//     autoUpdater.quitAndInstall();
-//   });
-// });
+// writeFileSync truncates first: a crash or a full disk between the truncate
+// and the write leaves the only copy of a plasmid empty. Write beside it and
+// rename, which is atomic on the same disk. Used by saving and by trimming
+// the history, both of which rewrite a file the user cannot get back.
+function writeFileAtomic(filePath, contents) {
+  const tmpPath = `${filePath}.ove-tmp`;
+  try {
+    fs.writeFileSync(tmpPath, contents);
+    fs.renameSync(tmpPath, filePath);
+  } catch (e) {
+    try {
+      fs.unlinkSync(tmpPath);
+    } catch (e2) {
+      /* nothing to clean up */
+    }
+    throw e;
+  }
+}
+
+/*  SAVED-VERSION HISTORY (#6)  */
+
+// The history lives in the file, so the file on disk is the only state there
+// is: read what is there now, add what we are about to write, hand it back to
+// be written with it. Nothing is cached between saves, so two windows editing
+// the same file cannot disagree about the history.
+function readHistoryFile(filePath) {
+  try {
+    if (path.extname(filePath) !== ".gb") return null;
+    const raw = fs.readFileSync(path.resolve(filePath), "utf8");
+    return bioParsers.genbankToJson(raw);
+  } catch (e) {
+    return null; // no file yet, or not readable: start a fresh history
+  }
+}
+
+async function historyOf(filePath) {
+  const parsed = await readHistoryFile(filePath);
+  if (!parsed || !parsed[0] || !parsed[0].parsedSequence) return [];
+  return history.read(parsed[0].parsedSequence);
+}
+
+// Rewrites the file with the history it already has, changed by `change`.
+// Used by trimming and clearing, which must not touch the sequence itself.
+async function rewriteHistory(filePath, change) {
+  const parsed = await readHistoryFile(filePath);
+  if (!parsed || !parsed[0] || !parsed[0].parsedSequence) return false;
+  const sequenceData = parsed[0].parsedSequence;
+  const next = change(history.read(sequenceData));
+  writeFileAtomic(filePath, bioParsers.jsonToGenbank(history.write(sequenceData, next)));
+  return true;
+}
+
+// Saving is synchronous further down, and bio-parsers' genbank reader is not,
+// so the history for the file being saved is read ahead of the write and kept
+// just long enough to be used by it.
+const pendingHistory = new Map();
+
+function withHistory(filePath, sequenceDataToSave) {
+  const entries = pendingHistory.get(filePath) || [];
+  pendingHistory.delete(filePath);
+  return history.write(
+    sequenceDataToSave,
+    history.add(entries, sequenceDataToSave, { by: os.userInfo().username })
+  );
+}
+
+// Which file the history belongs to is whichever tab is in front, and only
+// the renderer knows that, so the menu item is a question rather than an
+// order: the window answers by calling ove_historyTrim with its own path.
+function askWindowForHistory(opts) {
+  const bw = BrowserWindow.getFocusedWindow() || (windows[0] && windows[0].bw);
+  if (bw) bw.webContents.send("ove_menuHistory", opts);
+}
+
+ipcMain.handle("ove_historyTrim", async (event, { filePath, keep } = {}) => {
+  if (!filePath) return { ok: false, reason: "This tab has not been saved to a file yet." };
+  if (path.extname(filePath) !== ".gb") {
+    return { ok: false, reason: "Only GenBank files carry a version history." };
+  }
+  const before = (await historyOf(filePath)).length;
+  if (!before) return { ok: false, reason: "This file has no saved version history." };
+  const browserWindow = BrowserWindow.fromWebContents(event.sender);
+  const losing = Math.max(0, before - (keep || 0));
+  const { response } = await dialog.showMessageBox(browserWindow, {
+    type: "warning",
+    buttons: [keep ? `Trim to ${keep}` : "Delete all", "Cancel"],
+    defaultId: 1,
+    cancelId: 1,
+    message: keep
+      ? `Discard ${losing} of ${before} saved versions?`
+      : `Delete all ${before} saved versions?`,
+    detail:
+      `${path.basename(filePath)} keeps its version history inside the file itself, so this ` +
+      `makes the file smaller and cannot be undone. The sequence in front of you is not ` +
+      `touched${keep ? ", and the most recent versions are kept" : ""}.`,
+  });
+  if (response !== 0) return { ok: false, cancelled: true };
+  await rewriteHistory(filePath, (entries) => history.trim(entries, keep || 0));
+  const after = (await historyOf(filePath)).length;
+  return { ok: true, before, after };
+});
+
+ipcMain.handle("ove_historyList", async (event, { filePath } = {}) => {
+  if (!filePath) return [];
+  return history.list(await historyOf(filePath));
+});
+
+ipcMain.handle("ove_historyAt", async (event, { filePath, versionId } = {}) => {
+  if (!filePath) return null;
+  return history.dataAt(await historyOf(filePath), versionId);
+});
 
 /*  HANDLE THE API CALLS FROM THE RENDERER PROCESS  */
 
 ipcMain.handle(
   "ove_saveFile",
-  (event, { sequenceDataToSave, filePath }) => {
+  async (event, { sequenceDataToSave, filePath, previousFilePath }) => {
     const browserWindow = BrowserWindow.fromWebContents(event.sender);
 
     const ext = path.extname(filePath);
+    // GenBank is the only format with somewhere to keep it (#6). Save As
+    // writes a new file with no history of its own, so the history follows
+    // the sequence from the file it came from: a construct renamed on its way
+    // to v2 keeps its lineage rather than starting over.
+    if (ext === ".gb" || ext === "") {
+      let entries = await historyOf(filePath);
+      if (!entries.length && previousFilePath && previousFilePath !== filePath) {
+        entries = await historyOf(previousFilePath);
+      }
+      pendingHistory.set(filePath, entries);
+    }
 
     let formattedSeqString;
     if (ext === ".fasta") {
@@ -524,9 +653,9 @@ ipcMain.handle(
           });
       }
     } else {
-      formattedSeqString = bioParsers.jsonToGenbank(sequenceDataToSave);
+      formattedSeqString = bioParsers.jsonToGenbank(withHistory(filePath, sequenceDataToSave));
     }
-    fs.writeFileSync(filePath, formattedSeqString);
+    writeFileAtomic(filePath, formattedSeqString);
     noteRecentFile(filePath);
     // Save and Save As both retarget the tab, so the window's record of which
     // file it is showing follows either way.
@@ -743,12 +872,9 @@ ipcMain.handle("ove_parseSequenceText", async (event, { text, name } = {}) => {
   if (!raw.trim()) return { sequences: [], warnings: [], format: null };
   const fileName = name || "pasted";
 
-  if (taggedText.looksTagged(raw)) {
-    const { sequenceData, warnings } = taggedText.taggedToSequenceData(raw);
-    if (!sequenceData.name || sequenceData.name === "Untitled Sequence") {
-      sequenceData.name = fileName;
-    }
-    return { sequences: [sequenceData], warnings, format: "tagged text" };
+  const tagged = readTagged(taggedText, raw, fileName);
+  if (tagged) {
+    return { sequences: [tagged.sequenceData], warnings: tagged.warnings, format: "tagged text" };
   }
 
   // Bare bases, which is most pastes. See src/features/pastedBases.js for why
@@ -775,7 +901,7 @@ ipcMain.handle("ove_parseSequenceText", async (event, { text, name } = {}) => {
   }
 
   try {
-    const results = await bioParsers.anyToJson(raw, { fileName });
+    const results = await anyToJson(raw, fileName);
     const warnings = [];
     const sequences = [];
     let format = null;
@@ -813,10 +939,14 @@ ipcMain.handle("ove_openFilePicker", async (event) => {
 });
 
 ipcMain.handle("ove_showSaveDialog", async (event, opts) => {
-  return dialog.showSaveDialogSync(
-    BrowserWindow.fromWebContents(event.sender),
-    opts
-  );
+  // A "~/..." default path is not expanded by Electron -- it becomes a folder
+  // literally named "~", relative to wherever the app was started -- so the
+  // home-relative part is resolved here, where app.getPath exists.
+  const o = { ...opts };
+  if (typeof o.defaultPath === "string" && o.defaultPath.startsWith("~/")) {
+    o.defaultPath = path.join(app.getPath("home"), o.defaultPath.slice(2));
+  }
+  return dialog.showSaveDialogSync(BrowserWindow.fromWebContents(event.sender), o);
 });
 
 /*  **************************************************  */

@@ -73,6 +73,9 @@
           a.color || "",
           a.bases || "",
           a.notes ? JSON.stringify(a.notes) : "",
+          // a CDS with introns is written as join(...): editing only those
+          // sub-ranges changes the file and must count as a change
+          a.locations ? JSON.stringify(a.locations) : "",
         ].join("\u0001")
       );
       // the order OVE keeps them in is not the order they are written in
