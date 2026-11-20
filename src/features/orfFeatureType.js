@@ -1,0 +1,58 @@
+// A feature made from a selected ORF should come up as a CDS.
+//
+// OVE opens the Add Feature dialog on "misc_feature" whatever you selected, so
+// annotating an ORF -- the commonest reason to draw a feature on a plasmid --
+// meant changing the type by hand every time, and forgetting to meant a
+// coding sequence written to the file as misc_feature.
+//
+// The selection is judged on its own bases rather than on OVE's ORF list:
+// that list is computed by a selector only while ORFs are on screen, and the
+// copy hanging off sequenceData is empty. Bases are always there, and "starts
+// with a start codon, ends with a stop, nothing in between, a whole number of
+// codons" is what makes a selection an ORF in the first place.
+(function (root, factory) {
+  const api = factory();
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  if (typeof root !== "undefined" && root.document) root.oveOrfFeatureType = api;
+})(typeof globalThis !== "undefined" ? globalThis : this, function () {
+  const STOPS = ["TAA", "TAG", "TGA"];
+  // ATG plus the two OVE offers under "use GTG and CTG as start codons": a
+  // selection that starts at one of those and reads cleanly to a stop is a
+  // CDS whether or not that option happens to be on.
+  const STARTS = ["ATG", "GTG", "CTG", "TTG"];
+  const COMP = { A: "T", T: "A", G: "C", C: "G" };
+
+  const revcomp = (s) =>
+    s.split("").reverse().map((c) => COMP[c] || c).join("");
+
+  // The bases a selection covers, reading the way the feature will.
+  function basesOf({ sequence, start, end, forward = true, circular = false }) {
+    const seq = String(sequence || "").toUpperCase();
+    const n = seq.length;
+    if (!n || !(start >= 0) || !(end >= 0)) return "";
+    let out;
+    if (end >= start) out = seq.slice(start, end + 1);
+    else if (circular) out = seq.slice(start) + seq.slice(0, end + 1); // across the origin
+    else return "";
+    return forward === false ? revcomp(out) : out;
+  }
+
+  function looksLikeOrf(basesIn) {
+    const bases = String(basesIn || "").toUpperCase();
+    if (bases.length < 6 || bases.length % 3) return false;
+    if (!STARTS.includes(bases.slice(0, 3))) return false;
+    if (!STOPS.includes(bases.slice(-3))) return false;
+    for (let i = 3; i < bases.length - 3; i += 3) {
+      if (STOPS.includes(bases.slice(i, i + 3))) return false; // a stop inside is not one ORF
+    }
+    return true;
+  }
+
+  // The type a new feature over this range should open on, or null to leave
+  // OVE's own default alone.
+  function typeFor(range) {
+    return looksLikeOrf(basesOf(range)) ? "CDS" : null;
+  }
+
+  return { typeFor, looksLikeOrf, basesOf, STARTS, STOPS };
+});

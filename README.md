@@ -49,6 +49,13 @@ Owczarzy (2008) salt correction, and match Biopython's `Tm_NN` to within 0.001 �
 ### Editor
 - **Document tabs** — one window holds many sequences; drag a tab out to its own window,
   or drop it back onto another window's strip (right-click a tab for "Move to Window")
+- **A feature drawn over an ORF opens as a CDS**
+  ([`orfFeatureType.js`](src/features/orfFeatureType.js)) — annotating an ORF is the
+  commonest reason to draw a feature, and the dialog opened on `misc_feature` every
+  time, so a coding sequence reached the file mislabelled whenever that was forgotten.
+  A selection that starts on a start codon, reads a whole number of codons with no stop
+  inside and ends on one, opens as CDS; anything else keeps OVE's default. Works on the
+  bottom strand and across the origin of a plasmid.
 - **Per-feature colours** — a colour row in the Add/Edit Feature dialog, saved as a
   `/color=` qualifier so it survives a round trip through `.gb` and opens correctly elsewhere
 - **File → Open Recent** — last 10 files, ⌘1–⌘9, auto-pruned
