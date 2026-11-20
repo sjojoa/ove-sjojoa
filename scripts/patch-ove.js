@@ -250,6 +250,24 @@ const patches = [
     to: "  charWN = Math.min(arrowPointiness * charWN, width);",
   },
   {
+    // New Primer had no key at all upstream -- in a fork built around primer
+    // work, the wrong one of the three to be missing. mod+r is the repo
+    // owner's pick; it was the View menu's Reload, which is removed in
+    // src/main_utils/menu.js so the key reaches the editor at all (#24).
+    name: "cmd+r creates a primer",
+    from: "  newPrimer: {\n    handler: function handler(props) {\n      return props.handleNewPrimer();\n    },",
+    to: "  newPrimer: {\n    hotkey: \"mod+r\",\n    hotkeyProps: {\n      preventDefault: true\n    },\n    handler: function handler(props) {\n      return props.handleNewPrimer();\n    },",
+  },
+  {
+    // mod+t for New Feature, asked for by the repo owner. Nothing held it:
+    // not the editor, not this app's menus, not the browser. The upstream
+    // mod+k goes with it -- one item, one key, so the menu says what the
+    // keyboard does (#24).
+    name: "cmd+t creates a feature",
+    from: "    hotkey: \"mod+k\",",
+    to: "    hotkey: \"mod+t\",",
+  },
+  {
     // Annotating an ORF is the commonest reason to draw a feature, and the
     // dialog opened on "misc_feature" every time -- so a coding sequence got
     // written to the file as misc_feature whenever someone forgot to change

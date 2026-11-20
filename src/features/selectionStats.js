@@ -35,7 +35,12 @@
   // agree. dnaTools owns the values; these are only for saying them out loud.
   const conditions = () => (D() && D().DEFAULT_CONDITIONS) || {};
 
+  // Shared with the primer hybridisation view so the two cannot drift (#27).
+  const N = () => (typeof window !== "undefined" && window.oveTmNote) || null;
+
   function conditionsText() {
+    const n = N();
+    if (n) return n.conditionsText(D());
     const c = conditions();
     return [
       `${c.primerNM} nM primer`,
@@ -135,10 +140,13 @@
       title: "Melting temperature",
       width: 520,
       body: h("div", { className: "ove-tmcond" },
-        h("p", {}, "Nearest-neighbour Tm, SantaLucia (1998) parameters with the Owczarzy (2008) salt correction for Mg²⁺ and dNTPs."),
+        h("p", {}, (N() && N().MODEL) || "Nearest-neighbour Tm, SantaLucia (1998) parameters with the Owczarzy (2008) salt correction for Mg²⁺ and dNTPs."),
         h("p", {}, h("b", {}, "Conditions: "), conditionsText()),
         h("p", {}, `Shown for selections of ${MIN_TM_BP}–${MAX_TM_BP} bp. Longer selections show GC content only: this model describes an oligo annealing to its complement, not a kilobase of duplex.`),
-        h("p", {}, "The Cloning menu designs and reports primers at these same conditions, so the two agree."),
+        // what the number means next to the calculator people actually order
+        // against (#27)
+        ...((N() && N().NEB_PARAGRAPHS) || []).map((t) => h("p", {}, t)),
+        h("p", {}, (N() && N().WHERE) || "The Cloning menu designs and reports primers at these same conditions, so the two agree."),
       ),
     });
   }
