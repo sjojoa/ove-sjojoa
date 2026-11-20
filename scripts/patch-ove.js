@@ -250,6 +250,34 @@ const patches = [
     to: "  charWN = Math.min(arrowPointiness * charWN, width);",
   },
   {
+    // New Primer had no key at all upstream -- in a fork built around primer
+    // work, the wrong one of the three to be missing. mod+r is the repo
+    // owner's pick; it was the View menu's Reload, which is removed in
+    // src/main_utils/menu.js so the key reaches the editor at all (#24).
+    name: "cmd+r creates a primer",
+    from: "  newPrimer: {\n    handler: function handler(props) {\n      return props.handleNewPrimer();\n    },",
+    to: "  newPrimer: {\n    hotkey: \"mod+r\",\n    hotkeyProps: {\n      preventDefault: true\n    },\n    handler: function handler(props) {\n      return props.handleNewPrimer();\n    },",
+  },
+  {
+    // mod+t for New Feature, asked for by the repo owner. Nothing held it:
+    // not the editor, not this app's menus, not the browser. The upstream
+    // mod+k goes with it -- one item, one key, so the menu says what the
+    // keyboard does (#24).
+    name: "cmd+t creates a feature",
+    from: "    hotkey: \"mod+k\",",
+    to: "    hotkey: \"mod+t\",",
+  },
+  {
+    // Annotating an ORF is the commonest reason to draw a feature, and the
+    // dialog opened on "misc_feature" every time -- so a coding sequence got
+    // written to the file as misc_feature whenever someone forgot to change
+    // it. src/features/orfFeatureType.js decides; it returns null for
+    // anything that is not a clean ORF, which leaves OVE's default alone.
+    name: "a feature drawn over an ORF opens as a CDS",
+    from: "        showAddOrEditAnnotationDialog({\n          type: key.toLowerCase(),\n          annotation: withEditorProps_extends({}, rangeToUse, {\n            forward: !(selectionLayer.forward === false)\n          })\n        });",
+    to: "        var orfType = key === \"Feature\" && window.oveOrfFeatureType\n          ? window.oveOrfFeatureType.typeFor({\n              sequence: sequenceData.sequence,\n              start: rangeToUse.start,\n              end: rangeToUse.end,\n              forward: !(selectionLayer.forward === false),\n              circular: sequenceData.circular\n            })\n          : null;\n        showAddOrEditAnnotationDialog({\n          type: key.toLowerCase(),\n          annotation: withEditorProps_extends({}, rangeToUse, {\n            forward: !(selectionLayer.forward === false)\n          }, orfType ? { type: orfType } : {})\n        });",
+  },
+  {
     name: "alignment tool note reflects the built-in local aligner",
     from: "Note: This tool requires an alignment server to be hooked up for it to work properly. It will NOT work in the OVE demo page.",
     to: "Alignments run locally on this computer (no server needed). Tip: add .ab1 files, tick \\\"Align Sequencing Reads to Reference Sequence\\\" and optionally \\\"Auto-Trim\\\".",
