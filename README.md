@@ -79,6 +79,11 @@ Owczarzy (2008) salt correction, and match Biopython's `Tm_NN` to within 0.001 �
   for OVE to draw it. Anything else keeps OVE's default: with nothing on screen a length
   that merely divides by three would be called coding one time in three. Works on the
   bottom strand and across the origin of a plasmid.
+- **Clicking an amino acid keeps the translation's strand** — the click handed on the
+  bare codon range with no strand, so a selection made on a reverse-strand gene looked
+  like a forward one: the New Feature dialog opened on Positive, and the CDS default
+  refused it because the strand did not match the gene's. Selections off a reverse
+  translation now come back on the negative strand.
 - **Shift-clicking backwards selects the short way round** — shift-clicking a second
   amino acid took the start of the existing selection and the end of the new one
   whichever way round they were, so clicking an amino acid on a reverse-strand gene and
