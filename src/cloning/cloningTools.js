@@ -855,6 +855,45 @@
     return box;
   }
 
+  // A ligation junction has no Tm or uniqueness question -- what you want to
+  // see is the scar: which two ends met, and the sequence they made.
+  function ligationView(joins) {
+    return U.table(
+      [
+        { title: "Junction", render: (j) => `${j.after} \u2192 ${j.before}` },
+        { title: "Ends", render: (j) => (j.enzymes.length ? j.enzymes.join(" + ") : "\u2013") },
+        { title: "Overhang", render: (j) => (j.blunt ? "blunt" : `${j.overhang.length} nt ${j.overhang}`) },
+        {
+          title: "Across the junction (overhang in colour)",
+          render: (j) =>
+            h(
+              "span",
+              { className: "ove-cl-seq" },
+              h("span", { className: "ove-cl-flank" }, j.before5),
+              U.primerSpan("", j.overhang),
+              h("span", { className: "ove-cl-flank" }, j.after3)
+            ),
+        },
+      ],
+      joins
+    );
+  }
+
+  // How often each enzyme still cuts the product: 0 means the site was lost,
+  // 2 means you can cut the insert back out.
+  function recutLine(seqData, names) {
+    if (!names.length) return null;
+    const cuts = D.cutPositions(seqData, names);
+    const text = names
+      .map((n) => {
+        const enz = D.getEnzyme(n);
+        const count = cuts.filter((c) => c.enzyme === enz.name).length;
+        return `${enz.name} ${count}\u00d7`;
+      })
+      .join(", ");
+    return h("div", { className: "ove-cl-hint" }, `Sites left in the product: ${text}.`);
+  }
+
   // Each piece's Tm, worked out from the overlap the junction actually has.
   function withTms(joins) {
     return joins.map((j) => ({ ...j, tm: j.overlap ? D.tm(j.overlap) : null }));
@@ -1097,6 +1136,21 @@
           res.products
         )
       );
+      const names = [...new Set([...enzymeNames(vE1.input, vE2.input), ...enzymeNames(iE1.input, iE2.input)])];
+      res.products.forEach((p) => {
+        const seq = p.sequenceData.sequence;
+        let at = 0;
+        const previewPieces = (p.pieces || []).map((pc) => {
+          const piece = { name: pc.name, sequence: seq.slice(at, at + pc.length) };
+          at += pc.length;
+          return piece;
+        });
+        if (!previewPieces.length) return;
+        out.appendChild(productSummary({ pieces: previewPieces, sequence: seq, circular: true }));
+        out.appendChild(ligationView(PV.ligationJoins({ pieces: p.pieces, joins: p.joins, sequence: seq, circular: true })));
+        const recut = recutLine(p.sequenceData, names);
+        if (recut) out.appendChild(recut);
+      });
     });
 
     U.openDialog({

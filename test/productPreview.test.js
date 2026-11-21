@@ -115,3 +115,50 @@ describe("previewing an assembled product", () => {
     assert.deepStrictEqual(s.order, ["vec", "ins"]);
   });
 });
+
+describe("ligation junctions", () => {
+  // vec | ins, joined by a 4 nt sticky end at each join. The overhang bases
+  // live at the START of the right piece, not the end of the left one.
+  const lPieces = [{ name: "vec", length: 70 }, { name: "ins", length: 60 }];
+  const lJoins = [
+    { overhang: ins.slice(0, 4), enzymes: ["EcoRI", "MfeI"] },
+    { overhang: vec.slice(0, 4), enzymes: ["BamHI", "BglII"] },
+  ];
+  const joins = P.ligationJoins({ pieces: lPieces, joins: lJoins, sequence: product, circular: true, flank: 6 });
+
+  it("puts the overhang at the first base of the right piece", () => {
+    assert.strictEqual(joins[0].at, 70);
+    assert.strictEqual(product.slice(70, 74), joins[0].overhang);
+    assert.strictEqual(joins[0].before5, vec.slice(-6));
+    assert.strictEqual(joins[0].after3, product.slice(74, 80));
+  });
+
+  it("closes the circle back to the first piece", () => {
+    assert.strictEqual(joins[1].at, 0);
+    assert.strictEqual(joins[1].after, "ins");
+    assert.strictEqual(joins[1].before, "vec");
+    assert.strictEqual(joins[1].before5, ins.slice(-6)); // reads round the origin
+  });
+
+  it("names both enzymes that made the junction", () => {
+    assert.deepStrictEqual(joins[0].enzymes, ["EcoRI", "MfeI"]);
+  });
+
+  it("marks a blunt join as blunt", () => {
+    const [j] = P.ligationJoins({
+      pieces: lPieces,
+      joins: [{ overhang: "", enzymes: ["EcoRV"] }, { overhang: "" }],
+      sequence: product,
+      circular: true,
+      flank: 4,
+    });
+    assert.strictEqual(j.blunt, true);
+    assert.strictEqual(j.overhang, "");
+    assert.strictEqual(j.after3, product.slice(70, 74));
+  });
+
+  it("does not join the last piece back on a linear product", () => {
+    const rows = P.ligationJoins({ pieces: lPieces, joins: lJoins, sequence: product, circular: false });
+    assert.strictEqual(rows.length, 1);
+  });
+});

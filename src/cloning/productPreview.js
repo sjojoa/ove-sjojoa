@@ -94,6 +94,35 @@
     return joins;
   }
 
+  // Ligation junctions. Unlike a Gibson overlap, a sticky end is trimmed off
+  // the left piece before the join, so the overhang bases belong to the start
+  // of the right piece. `pieces` is [{name, length}] in assembly order and
+  // `joins` is [{overhang, enzymes}], one per piece, joining it to the next.
+  function ligationJoins({ pieces, joins, sequence, circular = true, flank = 12 }) {
+    const seq = (sequence || "").toUpperCase();
+    const n = seq.length;
+    if (!n || !(pieces || []).length) return [];
+    let at = 0;
+    const rows = (pieces || []).map((piece, i) => {
+      const next = pieces[(i + 1) % pieces.length];
+      at += piece.length;
+      const start = at % n;
+      const join = (joins || [])[i] || {};
+      const overhang = (join.overhang || "").toUpperCase();
+      return {
+        after: piece.name,
+        before: next.name,
+        at: start,
+        overhang: overhang,
+        blunt: !overhang.length,
+        enzymes: (join.enzymes || []).filter(Boolean),
+        before5: read(seq, start - flank < 0 ? start - flank + n : start - flank, flank, circular),
+        after3: read(seq, (start + overhang.length) % n, flank, circular),
+      };
+    });
+    return circular ? rows : rows.slice(0, -1);
+  }
+
   // One line per problem, worst first. Empty means the assembly looks sound.
   function problems(joins, { minOverlap = 15, minTm = 48 } = {}) {
     const out = [];
@@ -157,5 +186,5 @@
     };
   }
 
-  return { layout, junctions, problems, summary, contextOf, occurrences, read, gc, revcomp };
+  return { layout, junctions, ligationJoins, problems, summary, contextOf, occurrences, read, gc, revcomp };
 });
