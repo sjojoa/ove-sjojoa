@@ -125,3 +125,52 @@ describe("a feature drawn over amino acids opens as a CDS", () => {
     });
   });
 });
+
+describe("a selection inside a CDS feature", function () {
+  // ATG + 14 codons, no internal stop, at position 10.
+  const seq = "N".repeat(10) + "ATG" + "AAA".repeat(14) + "TAA" + "N".repeat(10);
+  const cds = [{ type: "CDS", start: 10, end: 10 + 48 - 1, forward: true }];
+
+  it("opens as a CDS when it is codon-aligned to the feature", function () {
+    assert.strictEqual(
+      O.typeFor({ sequence: seq, start: 13, end: 24, features: cds }),
+      "CDS"
+    );
+  });
+
+  it("is left alone when it is out of frame with the feature", function () {
+    assert.strictEqual(
+      O.typeFor({ sequence: seq, start: 14, end: 25, features: cds }),
+      null
+    );
+  });
+
+  it("is left alone when it runs past the end of the feature", function () {
+    assert.strictEqual(
+      O.typeFor({ sequence: seq, start: 49, end: 60, features: cds }),
+      null
+    );
+  });
+
+  it("is left alone when the feature is not a CDS", function () {
+    const misc = [{ type: "misc_feature", start: 10, end: 57, forward: true }];
+    assert.strictEqual(
+      O.typeFor({ sequence: seq, start: 13, end: 24, features: misc }),
+      null
+    );
+  });
+
+  it("ignores a CDS on the other strand", function () {
+    assert.strictEqual(
+      O.typeFor({ sequence: seq, start: 13, end: 24, forward: false, features: cds }),
+      null
+    );
+  });
+
+  it("accepts features keyed by id as well as an array", function () {
+    assert.strictEqual(
+      O.typeFor({ sequence: seq, start: 13, end: 24, features: { a1: cds[0] } }),
+      "CDS"
+    );
+  });
+});
