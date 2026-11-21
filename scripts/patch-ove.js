@@ -268,6 +268,18 @@ const patches = [
     to: "    hotkey: \"mod+t\",",
   },
   {
+    // Shift-clicking a second annotation took the start of the existing
+    // selection and the end of the new one, whichever way round they were.
+    // Click an amino acid on a reverse gene and shift-click one further
+    // along the protein -- which is a LOWER base number -- and you got
+    // start > end, which on a circular plasmid means the long way round the
+    // origin. Every other branch of this function picks the shorter range;
+    // this one now does too.
+    name: "shift-clicking backwards selects the short way round",
+    from: "        } else {\n          selectionLayerUpdate({\n            forward: newRange.forward,\n            start: selectionLayer.start,\n            end: newRange.end\n          });\n        }",
+    to: "        } else {\n          var forwardRange = {\n            forward: newRange.forward,\n            start: selectionLayer.start,\n            end: newRange.end\n          };\n          var backwardRange = {\n            forward: newRange.forward,\n            start: newRange.start,\n            end: selectionLayer.end\n          };\n          selectionLayerUpdate(getRangeLength(backwardRange, sequenceLength) < getRangeLength(forwardRange, sequenceLength) ? backwardRange : forwardRange);\n        }",
+  },
+  {
     // Annotating an ORF is the commonest reason to draw a feature, and the
     // dialog opened on "misc_feature" every time -- so a coding sequence got
     // written to the file as misc_feature whenever someone forgot to change
