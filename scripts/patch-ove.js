@@ -303,6 +303,37 @@ const patches = [
     from: "Note: This tool requires an alignment server to be hooked up for it to work properly. It will NOT work in the OVE demo page.",
     to: "Alignments run locally on this computer (no server needed). Tip: add .ab1 files, tick \\\"Align Sequencing Reads to Reference Sequence\\\" and optionally \\\"Auto-Trim\\\".",
   },
+  {
+    name: "cut-site labels say how often the enzyme cuts and what end it leaves",
+    from: `      if (numberOfCuts === 1) {
+        cutsite.labelColor = mergedCutsiteColors.single;
+        cutsite.labelClassname = "singleCutter";
+      } else if (numberOfCuts === 2) {
+        cutsite.labelColor = mergedCutsiteColors["double"];
+        cutsite.labelClassname = "doubleCutter";
+      } else {
+        cutsite.labelColor = mergedCutsiteColors.multi;
+        cutsite.labelClassname = "multiCutter";
+      }`,
+    to: `      if (numberOfCuts === 1) {
+        cutsite.labelColor = mergedCutsiteColors.single;
+        cutsite.labelClassname = "singleCutter";
+      } else if (numberOfCuts === 2) {
+        cutsite.labelColor = mergedCutsiteColors["double"];
+        cutsite.labelClassname = "doubleCutter";
+      } else {
+        cutsite.labelColor = mergedCutsiteColors.multi;
+        cutsite.labelClassname = "multiCutter";
+      }
+      // the line above never reaches the DOM: the label renderer reads
+      // labelClassName, not labelClassname. Set it, and say what kind of cut
+      // it is, so the map answers "what can I cut with?" on its own.
+      cutsite.labelClassName = [
+        numberOfCuts === 1 ? "veCutUnique" : numberOfCuts === 2 ? "veCutTwice" : "veCutMulti",
+        cutsite.topSnipPosition === cutsite.bottomSnipPosition ? "veCutBlunt" : "veCutSticky",
+        cutsite.restrictionEnzyme && cutsite.restrictionEnzyme.isType2S ? "veCutType2s" : "",
+      ].join(" ");`,
+  },
 ];
 
 if (!fs.existsSync(bundlePath)) {
