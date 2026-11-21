@@ -89,6 +89,54 @@
     });
   }
 
+  // ORFs shown on screen are the third way to see amino acids, and the one
+  // meant by "annotate that ORF". OVE computes them in a selector, so there
+  // is no list hanging off the editor state -- but the sequence is enough:
+  // walk back in frame to the start codon the ORF row is drawn from, then
+  // forward to its stop, and see whether the selection fits inside.
+  //
+  // shortcut: an ORF across the origin of a plasmid is not followed; revisit
+  // if annotating one turns out to matter.
+  function inDisplayedOrf({
+    sequence,
+    start,
+    end,
+    forward = true,
+    orfsShown,
+    minimumOrfSize = 0,
+  }) {
+    if (!orfsShown) return false;
+    let seq = String(sequence || "").toUpperCase();
+    const n = seq.length;
+    if (!n || !(start >= 0) || !(end >= start)) return false;
+    let from = start;
+    let to = end;
+    if (forward === false) {
+      seq = revcomp(seq);
+      from = n - 1 - end;
+      to = n - 1 - start;
+    }
+    if (to - from + 1 < 6 || (to - from + 1) % 3) return false;
+
+    // The ORF row starts at the first start codon after the previous stop,
+    // which is the furthest one back we can reach without crossing a stop.
+    let orfStart = -1;
+    for (let i = from; i >= 0; i -= 3) {
+      const codon = seq.slice(i, i + 3);
+      if (i !== from && STOPS.includes(codon)) break;
+      if (STARTS.includes(codon)) orfStart = i;
+    }
+    if (orfStart < 0) return false;
+
+    for (let i = orfStart; i + 3 <= n; i += 3) {
+      if (!STOPS.includes(seq.slice(i, i + 3))) continue;
+      const orfEnd = i + 2;
+      if (orfEnd < to) return false; // the ORF stops before the selection does
+      return orfEnd - orfStart + 1 >= minimumOrfSize; // shorter than OVE draws
+    }
+    return false;
+  }
+
   // The type a new feature over this range should open on, or null to leave
   // OVE's own default alone.
   //
@@ -102,6 +150,7 @@
     const bases = basesOf(range);
     if (looksLikeOrf(bases)) return "CDS";
     if (inFrameWithCds(range)) return "CDS";
+    if (inDisplayedOrf(range)) return "CDS";
     const frames = range.frames || [];
     if (!frames.length) return null;
     const frame = frameOf({
@@ -114,5 +163,5 @@
     return readsAsProtein(bases) ? "CDS" : null;
   }
 
-  return { typeFor, inFrameWithCds, looksLikeOrf, readsAsProtein, frameOf, basesOf, STARTS, STOPS };
+  return { typeFor, inFrameWithCds, inDisplayedOrf, looksLikeOrf, readsAsProtein, frameOf, basesOf, STARTS, STOPS };
 });

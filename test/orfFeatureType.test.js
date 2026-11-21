@@ -174,3 +174,34 @@ describe("a selection inside a CDS feature", function () {
     );
   });
 });
+
+describe("a selection inside an ORF that is on screen", function () {
+  // ATG + 29 codons + TAA at position 12, inside filler with no start codons.
+  const body = "AAACCCGGGTTT".repeat(2) + "AAACCCGGG" + "TTTAAACCCGGG".repeat(5); // 87 nt, no stop
+  const orfSeq = "ATG" + body + "TAA";
+  const seq = "NNNNNNNNNNNN" + orfSeq + "NNNNNNNNNNNN";
+  const on = { sequence: seq, orfsShown: true };
+
+  it("opens as a CDS for a codon-aligned stretch inside the ORF", function () {
+    assert.strictEqual(O.typeFor(Object.assign({ start: 21, end: 38 }, on)), "CDS");
+  });
+
+  it("is left alone when ORFs are not displayed", function () {
+    assert.strictEqual(O.typeFor({ sequence: seq, start: 21, end: 38 }), null);
+  });
+
+  it("is left alone when the selection is out of the ORF's frame", function () {
+    assert.strictEqual(O.typeFor(Object.assign({ start: 22, end: 39 }, on)), null);
+  });
+
+  it("is left alone when the selection runs past the ORF's stop", function () {
+    assert.strictEqual(O.typeFor(Object.assign({ start: 21, end: 116 }, on)), null);
+  });
+
+  it("is left alone when the ORF is shorter than OVE draws", function () {
+    assert.strictEqual(
+      O.typeFor(Object.assign({ start: 21, end: 38, minimumOrfSize: 300 }, on)),
+      null
+    );
+  });
+});
