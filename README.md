@@ -75,7 +75,8 @@ Owczarzy (2008) salt correction, and match Biopython's `Tm_NN` to within 0.001 �
   inside and ends on one, opens as CDS; so does one made by picking amino acids off a
   translation row — either one of the +1/+2/+3 rows you have turned on, or the row OVE
   draws under a CDS feature of its own accord, which is the usual way an insert is
-  annotated. Anything else keeps OVE's default: with no translation on screen a length
+  annotated, or an ORF row, where the selection has to sit inside an ORF long enough
+  for OVE to draw it. Anything else keeps OVE's default: with nothing on screen a length
   that merely divides by three would be called coding one time in three. Works on the
   bottom strand and across the origin of a plasmid.
 - **Per-feature colours** — a colour row in the Add/Edit Feature dialog, saved as a
