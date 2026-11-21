@@ -73,8 +73,9 @@ Owczarzy (2008) salt correction, and match Biopython's `Tm_NN` to within 0.001 �
   time, so a coding sequence reached the file mislabelled whenever that was forgotten.
   A selection that starts on a start codon, reads a whole number of codons with no stop
   inside and ends on one, opens as CDS; so does one made by picking amino acids off a
-  translation row — codon-aligned to a reading frame you have displayed, coding all the
-  way to the end. Anything else keeps OVE's default: with no frame on screen a length
+  translation row — either one of the +1/+2/+3 rows you have turned on, or the row OVE
+  draws under a CDS feature of its own accord, which is the usual way an insert is
+  annotated. Anything else keeps OVE's default: with no translation on screen a length
   that merely divides by three would be called coding one time in three. Works on the
   bottom strand and across the origin of a plasmid.
 - **Per-feature colours** — a colour row in the Add/Edit Feature dialog, saved as a

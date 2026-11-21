@@ -67,6 +67,28 @@
     return true;
   }
 
+  // A translation row also comes from a CDS feature's own translation, which
+  // OVE draws without any frame row being on. A selection inside such a
+  // feature, on its strand and codon-aligned to its reading frame, is amino
+  // acids off that row.
+  //
+  // shortcut: a CDS that crosses the origin, or a joined feature, is skipped
+  // rather than unwound; revisit if those turn up in practice.
+  function inFrameWithCds({ start, end, forward = true, features }) {
+    const length = end - start + 1;
+    if (!(length >= 6) || length % 3) return false;
+    const list = Array.isArray(features) ? features : Object.values(features || {});
+    return list.some((f) => {
+      if (!f || String(f.type || "").toLowerCase() !== "cds") return false;
+      if (!(f.start >= 0) || !(f.end >= f.start)) return false;
+      if ((f.forward !== false) !== (forward !== false)) return false;
+      if (start < f.start || end > f.end) return false;
+      return forward === false
+        ? (f.end - end) % 3 === 0
+        : (start - f.start) % 3 === 0;
+    });
+  }
+
   // The type a new feature over this range should open on, or null to leave
   // OVE's own default alone.
   //
@@ -79,6 +101,7 @@
   function typeFor(range) {
     const bases = basesOf(range);
     if (looksLikeOrf(bases)) return "CDS";
+    if (inFrameWithCds(range)) return "CDS";
     const frames = range.frames || [];
     if (!frames.length) return null;
     const frame = frameOf({
@@ -91,5 +114,5 @@
     return readsAsProtein(bases) ? "CDS" : null;
   }
 
-  return { typeFor, looksLikeOrf, readsAsProtein, frameOf, basesOf, STARTS, STOPS };
+  return { typeFor, inFrameWithCds, looksLikeOrf, readsAsProtein, frameOf, basesOf, STARTS, STOPS };
 });
