@@ -79,6 +79,13 @@ Owczarzy (2008) salt correction, and match Biopython's `Tm_NN` to within 0.001 �
   for OVE to draw it. Anything else keeps OVE's default: with nothing on screen a length
   that merely divides by three would be called coding one time in three. Works on the
   bottom strand and across the origin of a plasmid.
+- **Shift-clicking backwards selects the short way round** — shift-clicking a second
+  amino acid took the start of the existing selection and the end of the new one
+  whichever way round they were, so clicking an amino acid on a reverse-strand gene and
+  shift-clicking one further along the protein — a *lower* base number — selected
+  everything the long way round the origin instead of the span between them. The
+  shorter of the two now wins, which is what every other branch of that code already
+  did.
 - **Per-feature colours** — a colour row in the Add/Edit Feature dialog, saved as a
   `/color=` qualifier so it survives a round trip through `.gb` and opens correctly elsewhere
 - **File → Open Recent** — last 10 files, ⌘1–⌘9, auto-pruned
