@@ -360,3 +360,13 @@ details.ove-cl-details summary {
 .bp3-dialog:has(.ove-ph-dialog-host) .bp3-dialog-body > .ove-color-field + div {
   display: none;
 }
+
+/* Sequence across an assembly junction: the overlap is coloured by
+   primerSpan, the bases either side come from the two parents. */
+.ove-cl-seq {
+  font-family: Menlo, Monaco, "Courier New", monospace;
+  white-space: nowrap;
+}
+.ove-cl-flank {
+  opacity: 0.55;
+}
