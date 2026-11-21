@@ -162,3 +162,45 @@ describe("ligation junctions", () => {
     assert.strictEqual(rows.length, 1);
   });
 });
+
+describe("PCR products", () => {
+  const F = [{ start: 100, end: 119, mismatches: 0 }];
+  const R = [{ start: 580, end: 599, mismatches: 0 }];
+
+  it("gives the one product a specific pair makes", () => {
+    const out = P.pcrProducts({ forwardSites: F, reverseSites: R, templateLength: 3000 });
+    assert.strictEqual(out.length, 1);
+    assert.deepStrictEqual(out[0], { start: 100, end: 599, size: 500, mismatches: 0 });
+  });
+
+  it("finds the extra band a second binding site makes, smallest first", () => {
+    const out = P.pcrProducts({
+      forwardSites: F,
+      reverseSites: [...R, { start: 280, end: 299, mismatches: 2 }],
+      templateLength: 3000,
+    });
+    assert.deepStrictEqual(out.map((p) => p.size), [200, 500]);
+    assert.strictEqual(out[0].mismatches, 2);
+  });
+
+  it("ignores a reverse site behind the forward primer on a linear template", () => {
+    const out = P.pcrProducts({ forwardSites: F, reverseSites: [{ start: 10, end: 29 }], templateLength: 3000 });
+    assert.deepStrictEqual(out, []);
+  });
+
+  it("amplifies round the origin of a circular template", () => {
+    const out = P.pcrProducts({
+      forwardSites: [{ start: 2900, end: 2919 }],
+      reverseSites: [{ start: 80, end: 99 }],
+      templateLength: 3000,
+      circular: true,
+    });
+    assert.strictEqual(out.length, 1);
+    assert.strictEqual(out[0].size, 200); // 2900..2999 then 0..99
+  });
+
+  it("drops a product too big to amplify", () => {
+    const out = P.pcrProducts({ forwardSites: F, reverseSites: R, templateLength: 3000, maxSize: 200 });
+    assert.deepStrictEqual(out, []);
+  });
+});

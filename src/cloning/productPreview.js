@@ -123,6 +123,34 @@
     return circular ? rows : rows.slice(0, -1);
   }
 
+  // Every product a pair can make on one template: each forward site paired
+  // with a reverse site facing it. More than one is the usual reason a PCR
+  // comes back with extra bands.
+  //
+  // Sites are {start, end, mismatches} in template coordinates, as
+  // findBindingSites returns them; a product runs from a forward site's
+  // first base to a reverse site's last base.
+  function pcrProducts({ forwardSites, reverseSites, templateLength, circular = false, maxSize = 20000 }) {
+    const n = templateLength;
+    const out = [];
+    (forwardSites || []).forEach((f) => {
+      (reverseSites || []).forEach((r) => {
+        let size;
+        if (circular) size = (((r.end - f.start) % n) + n) % n + 1;
+        else if (r.end < f.start) return;
+        else size = r.end - f.start + 1;
+        if (size <= 0 || size > maxSize) return;
+        out.push({
+          start: f.start,
+          end: r.end,
+          size: size,
+          mismatches: (f.mismatches || 0) + (r.mismatches || 0),
+        });
+      });
+    });
+    return out.sort((a, b) => a.size - b.size);
+  }
+
   // One line per problem, worst first. Empty means the assembly looks sound.
   function problems(joins, { minOverlap = 15, minTm = 48 } = {}) {
     const out = [];
@@ -186,5 +214,5 @@
     };
   }
 
-  return { layout, junctions, ligationJoins, problems, summary, contextOf, occurrences, read, gc, revcomp };
+  return { layout, junctions, ligationJoins, pcrProducts, problems, summary, contextOf, occurrences, read, gc, revcomp };
 });

@@ -231,6 +231,7 @@
     const fTail = tailEditor("Forward primer 5′ addition", seqData);
     const rTail = tailEditor("Reverse primer 5′ addition", seqData);
     const results = h("div");
+    const productBox = h("div");
     let pairs = [];
     let chosen = null;
     let tails = { f: "", r: "" };
@@ -297,14 +298,21 @@
             },
           ],
           pairs,
-          { onSelect: (p) => (chosen = p), selectedIndex: 0 }
+          { onSelect: (p) => { chosen = p; showProduct(); }, selectedIndex: 0 }
         ),
         U.callout(
           "Tm is for the annealing part only (tails in lowercase orange). Ta: Taq ≈ lower Tm − 5 °C; Q5/Phusion ≈ lower Tm + 3 °C (max 72). Hover ⚠ for details. Click a row to choose it.",
           "none"
         )
       );
+      showProduct();
     });
+
+    const showProduct = () => {
+      productBox.innerHTML = "";
+      if (!chosen) return;
+      productBox.appendChild(U.section("Product", pcrProductView({ seqData, pair: chosen, tails, name })));
+    };
 
     const needChosen = () => {
       if (!chosen) throw new Error("Design primers and choose a pair first");
@@ -352,6 +360,7 @@
         U.section("Primer rules", U.row(U.field("Target Tm °C", tmT), U.field("Min Tm", tmMin), U.field("Max Tm", tmMax), U.field("Min length", lenMin), U.field("Max length", lenMax)), cond.el),
         U.section("5′ additions (restriction sites, Kozak, tags…)", U.row(fTail.el, rTail.el)),
         results,
+        productBox,
       ],
       footer,
     });
@@ -850,6 +859,79 @@
           },
         ],
         joins
+      )
+    );
+    return box;
+  }
+
+  // What the PCR will actually give you: the product's ends, and whether the
+  // pair can prime anywhere else on this template (extra bands).
+  function pcrProductView({ seqData, pair, tails, name }) {
+    const box = h("div");
+    const n = seqData.sequence.length;
+    const amp = D.circSlice(seqData.sequence, pair.productStart, pair.productEnd + 1, seqData.circular);
+    const total = amp.length + tails.f.length + tails.r.length;
+    const parts = [
+      tails.f.length ? `${tails.f.length} nt 5\u2032 addition` : null,
+      `${amp.length} bp of ${name} (${oneBased(pair.productStart)}\u2013${oneBased(pair.productEnd)})`,
+      tails.r.length ? `${tails.r.length} nt 5\u2032 addition` : null,
+    ].filter(Boolean);
+    box.appendChild(U.callout(`${total} bp linear product: ${parts.join(" + ")}.`, "success"));
+
+    const flank = 15;
+    const ends = [
+      { end: "5\u2032", tail: tails.f, body: amp.slice(0, flank), tailFirst: true },
+      { end: "3\u2032", tail: D.revcomp(tails.r), body: amp.slice(-flank), tailFirst: false },
+    ];
+    box.appendChild(
+      U.table(
+        [
+          { title: "End of the product", render: (e) => e.end },
+          {
+            title: "Sequence (5\u2032 addition in colour)",
+            render: (e) =>
+              h(
+                "span",
+                { className: "ove-cl-seq" },
+                e.tailFirst ? U.primerSpan("", e.tail) : h("span", { className: "ove-cl-flank" }, e.body),
+                e.tailFirst ? h("span", { className: "ove-cl-flank" }, e.body) : U.primerSpan("", e.tail)
+              ),
+          },
+        ],
+        ends
+      )
+    );
+
+    // Extra bands: either primer binding a second time is the usual cause.
+    let sites;
+    try {
+      sites = {
+        f: findBindingSites(seqData.sequence, seqData.circular, tails.f + pair.forward.seq, 1),
+        r: findBindingSites(seqData.sequence, seqData.circular, tails.r + pair.reverse.seq, 1),
+      };
+    } catch (e) {
+      return box; // the preview is worth having even if the search fails
+    }
+    const products = PV.pcrProducts({
+      forwardSites: sites.f.filter((s) => s.strand === 1),
+      reverseSites: sites.r.filter((s) => s.strand === -1),
+      templateLength: n,
+      circular: !!seqData.circular,
+    });
+    const expected = products.find((p) => p.start === pair.productStart && p.end === pair.productEnd);
+    const extras = products.filter((p) => p !== expected);
+    if (!expected || !extras.length) {
+      box.appendChild(
+        h("div", { className: "ove-cl-hint" }, `Each primer binds ${sites.f.length === 1 && sites.r.length === 1 ? "once" : `${sites.f.length}\u00d7 / ${sites.r.length}\u00d7`} on this template, giving one product.`)
+      );
+      return box;
+    }
+    box.appendChild(
+      U.callout(
+        `This pair can also prime elsewhere on ${name}: ${extras
+          .map((p) => `${p.size} bp (${oneBased(p.start)}\u2013${oneBased(p.end)}${p.mismatches ? `, ${p.mismatches} mismatch${p.mismatches > 1 ? "es" : ""}` : ", exact"})`)
+          .join(", ")}. Expect extra bands \u2014 move a primer, or gel-purify the ${expected.size} bp band.`,
+        "warning"
       )
     );
     return box;
