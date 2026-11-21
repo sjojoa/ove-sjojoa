@@ -268,6 +268,15 @@ const patches = [
     to: "    hotkey: \"mod+t\",",
   },
   {
+    // Clicking an amino acid handed on the bare codon range, with no strand.
+    // On a reverse-strand gene the selection therefore looked like a forward
+    // one: the New Feature dialog opened on Positive, and the CDS default
+    // below refused it because the strand did not match the gene's.
+    name: "clicking an amino acid keeps the translation's strand",
+    from: "        onClick: function onClick(event) {\n          _onClick({\n            annotation: aminoAcidSliver.codonRange,",
+    to: "        onClick: function onClick(event) {\n          _onClick({\n            annotation: {\n              start: aminoAcidSliver.codonRange.start,\n              end: aminoAcidSliver.codonRange.end,\n              forward: !(annotation && annotation.forward === false)\n            },",
+  },
+  {
     // Shift-clicking a second annotation took the start of the existing
     // selection and the end of the new one, whichever way round they were.
     // Click an amino acid on a reverse gene and shift-click one further
