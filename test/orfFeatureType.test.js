@@ -51,10 +51,77 @@ describe("a feature drawn over an ORF opens as a CDS", () => {
       assert.strictEqual(O.typeFor({ sequence: seq, start: 14, end: 8, circular: false }), null);
     });
 
+    it("leaves a codon-aligned range alone when no frame is displayed", () => {
+      // one range in three divides by three; without a displayed frame to
+      // line it up with, calling that coding would be guessing
+      assert.strictEqual(O.typeFor({ sequence, start: 4, end: 4 + 11 }), null);
+    });
+
     it("leaves anything else to OVE's own default", () => {
       assert.strictEqual(O.typeFor({ sequence, start: 0, end: 3 }), null);
       assert.strictEqual(O.typeFor({ sequence: "", start: 0, end: 5 }), null);
       assert.strictEqual(O.typeFor({ sequence, start: -1, end: -1 }), null);
+    });
+  });
+});
+
+describe("a feature drawn over amino acids opens as a CDS", () => {
+  // 30 nt of coding sequence with no stop in it, placed so it starts in
+  // frame 1 (0-based index 0, 3, 6 ... are frame 1)
+  const coding = "ATGAAACCCGGGTTTAAACCCGGGTTTAAA";
+  const sequence = coding + "TTTTTTTTT";
+
+  it("says CDS for a codon-aligned selection in a frame that is shown", () => {
+    assert.strictEqual(
+      O.typeFor({ sequence, start: 0, end: coding.length - 1, frames: [1] }),
+      "CDS"
+    );
+  });
+
+  it("says nothing when that frame is not displayed", () => {
+    assert.strictEqual(
+      O.typeFor({ sequence, start: 0, end: coding.length - 1, frames: [2, 3] }),
+      null
+    );
+  });
+
+  it("says nothing for a selection that is not codon-aligned to a shown frame", () => {
+    // starts at 1, which is frame 2, while only frame 1 is displayed
+    assert.strictEqual(O.typeFor({ sequence, start: 1, end: 12, frames: [1] }), null);
+  });
+
+  it("says nothing when a stop sits inside the selection", () => {
+    const withStop = "ATGAAATGACCCGGGTTTAAACCCGGGTTT";
+    assert.strictEqual(
+      O.typeFor({ sequence: withStop + "AAA", start: 0, end: withStop.length - 1, frames: [1] }),
+      null
+    );
+  });
+
+  it("allows a stop as the last codon, which is where one belongs", () => {
+    const toStop = "ATGAAACCCGGGTTTAAACCCGGGTTTTAA";
+    assert.strictEqual(
+      O.typeFor({ sequence: toStop, start: 0, end: toStop.length - 1, frames: [1] }),
+      "CDS"
+    );
+  });
+
+  describe("which frame a range sits in", () => {
+    it("counts the top strand from the start", () => {
+      assert.strictEqual(O.frameOf({ start: 0, end: 8 }), 1);
+      assert.strictEqual(O.frameOf({ start: 1, end: 9 }), 2);
+      assert.strictEqual(O.frameOf({ start: 2, end: 10 }), 3);
+      assert.strictEqual(O.frameOf({ start: 3, end: 11 }), 1);
+    });
+
+    it("counts the bottom strand back from the end of the sequence", () => {
+      assert.strictEqual(O.frameOf({ start: 0, end: 29, forward: false, sequenceLength: 30 }), -1);
+      assert.strictEqual(O.frameOf({ start: 0, end: 28, forward: false, sequenceLength: 30 }), -2);
+    });
+
+    it("has no answer without the length it needs", () => {
+      assert.strictEqual(O.frameOf({ start: 0, end: 29, forward: false }), null);
+      assert.strictEqual(O.frameOf({ start: -1, end: -1 }), null);
     });
   });
 });

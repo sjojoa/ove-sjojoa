@@ -48,11 +48,48 @@
     return true;
   }
 
-  // The type a new feature over this range should open on, or null to leave
-  // OVE's own default alone.
-  function typeFor(range) {
-    return looksLikeOrf(basesOf(range)) ? "CDS" : null;
+  // Which reading frame a range sits in, 1..3 on the top strand and -1..-3 on
+  // the bottom, counted the way OVE numbers its translation rows.
+  function frameOf({ start, end, forward = true, sequenceLength }) {
+    if (!(start >= 0)) return null;
+    if (forward !== false) return (start % 3) + 1;
+    if (!(sequenceLength > 0) || !(end >= 0)) return null;
+    return -(((sequenceLength - 1 - end) % 3) + 1);
   }
 
-  return { typeFor, looksLikeOrf, basesOf, STARTS, STOPS };
+  // Codon-aligned, long enough to mean something, and coding all the way to
+  // the end: a stop is allowed as the last codon and nowhere else.
+  function readsAsProtein(bases) {
+    if (bases.length < 6 || bases.length % 3) return false;
+    for (let i = 0; i < bases.length - 3; i += 3) {
+      if (STOPS.includes(bases.slice(i, i + 3))) return false;
+    }
+    return true;
+  }
+
+  // The type a new feature over this range should open on, or null to leave
+  // OVE's own default alone.
+  //
+  // Two ways to be a CDS. A clean ORF is one, whether or not anything is on
+  // screen. The other is a selection made by picking amino acids off a
+  // translation row: those are codon-aligned to a frame the user has
+  // displayed, which is what `frames` carries. Without that, a range whose
+  // length merely divides by three would be called coding one time in three,
+  // which is worse than leaving it alone.
+  function typeFor(range) {
+    const bases = basesOf(range);
+    if (looksLikeOrf(bases)) return "CDS";
+    const frames = range.frames || [];
+    if (!frames.length) return null;
+    const frame = frameOf({
+      start: range.start,
+      end: range.end,
+      forward: range.forward,
+      sequenceLength: (range.sequence || "").length,
+    });
+    if (frame === null || !frames.includes(frame)) return null;
+    return readsAsProtein(bases) ? "CDS" : null;
+  }
+
+  return { typeFor, looksLikeOrf, readsAsProtein, frameOf, basesOf, STARTS, STOPS };
 });
