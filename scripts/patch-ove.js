@@ -334,6 +334,59 @@ const patches = [
         cutsite.restrictionEnzyme && cutsite.restrictionEnzyme.isType2S ? "veCutType2s" : "",
       ].join(" ");`,
   },
+  {
+    name: "the cut-site panel has a Type column",
+    from: `      fields: [{
+        path: "name",
+        type: "string"
+      }, {
+        path: "numberOfCuts",
+        type: "number"
+      }, {
+        path: "groups",
+        type: "string"
+      }]`,
+    to: `      fields: [{
+        path: "name",
+        type: "string"
+      }, {
+        path: "numberOfCuts",
+        type: "number"
+      }, {
+        path: "cutKind",
+        type: "string",
+        displayName: "Type"
+      }, {
+        path: "groups",
+        type: "string"
+      }]`,
+  },
+  {
+    name: "the cut-site panel says unique / overhang / Type IIS",
+    from: `      return {
+        cutsiteGroup: cutsiteGroup,
+        id: name,
+        name: name,
+        numberOfCuts: cutsiteGroup.length,
+        enzyme: cutsiteGroup[0].restrictionEnzyme,
+        groups: groups`,
+    to: `      var cutsiteEnzyme = cutsiteGroup[0].restrictionEnzyme || {};
+      // what the map's bold / faded / dotted / arrow marks mean, in words
+      var overhang = Math.abs(cutsiteEnzyme.topSnipOffset - cutsiteEnzyme.bottomSnipOffset);
+      var cutKind = [
+        cutsiteGroup.length === 1 ? "unique" : cutsiteGroup.length + "\\u00d7",
+        overhang ? overhang + " nt " + (cutsiteEnzyme.topSnipOffset < cutsiteEnzyme.bottomSnipOffset ? "5\\u2032" : "3\\u2032") + " overhang" : "blunt",
+        cutsiteEnzyme.isType2S ? "Type IIS" : null
+      ].filter(Boolean).join(" \\u00b7 ");
+      return {
+        cutsiteGroup: cutsiteGroup,
+        id: name,
+        name: name,
+        numberOfCuts: cutsiteGroup.length,
+        cutKind: cutKind,
+        enzyme: cutsiteGroup[0].restrictionEnzyme,
+        groups: groups`,
+  },
 ];
 
 if (!fs.existsSync(bundlePath)) {
