@@ -361,6 +361,15 @@ details.ove-cl-details summary {
   display: none;
 }
 
+/* Sequence across an assembly junction: the overlap is coloured by
+   primerSpan, the bases either side come from the two parents. */
+.ove-cl-seq {
+  font-family: Menlo, Monaco, "Courier New", monospace;
+  white-space: nowrap;
+}
+.ove-cl-flank {
+  opacity: 0.55;
+}
 /* Codon usage table: the classic 4x4x4 grid, one cell per first/second base */
 .ove-cl-codon-table { border-collapse: collapse; width: 100%; }
 .ove-cl-codon-table th {

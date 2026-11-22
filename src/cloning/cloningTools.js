@@ -8,6 +8,8 @@
   // reading a construct back out of primers designed elsewhere (#20)
   const F = window.oveFromPrimers;
   const PH = window.ovePrimerHybridization;
+  // what the assembly will be, checked before you order anything (#42)
+  const PV = window.oveProductPreview;
   const { h } = U;
 
   let editor = null;
@@ -810,6 +812,63 @@
   }
 
   // --------------------------------------------------- restriction cloning
+  // ------------------------------------------- what the assembly will be (#42)
+  // The product, its joins, and whether each join holds. Shared by both Gibson
+  // modes: designing the overlaps here, and reading them off primers that
+  // already exist. `joins` are productPreview junctions with a Tm added.
+  function junctionView(joins, { minOverlap = 15 } = {}) {
+    const box = h("div");
+    PV.problems(joins, { minOverlap }).forEach((p) =>
+      box.appendChild(U.callout(p.text, p.level))
+    );
+    box.appendChild(
+      U.table(
+        [
+          { title: "Junction", render: (j) => `${j.after} → ${j.before}` },
+          { title: "Overlap", render: (j) => `${j.length} nt` },
+          { title: "Tm", render: (j) => (typeof j.tm === "number" ? `${U.fmt(j.tm)} °C` : "–") },
+          { title: "GC", render: (j) => `${Math.round(j.gc)}%` },
+          {
+            title: "Unique",
+            render: (j) =>
+              j.occurrences === 1
+                ? "yes"
+                : h("span", { className: "ove-cl-warn", title: "This overlap occurs more than once, so the pieces can join in the wrong order" }, `${j.occurrences}×`),
+          },
+          {
+            title: "Across the junction (overlap in colour)",
+            render: (j) =>
+              j.before5 === undefined
+                ? U.primerSpan("", j.overlap)
+                : h(
+                    "span",
+                    { className: "ove-cl-seq" },
+                    h("span", { className: "ove-cl-flank" }, j.before5),
+                    U.primerSpan("", j.overlap),
+                    h("span", { className: "ove-cl-flank" }, j.after3)
+                  ),
+          },
+        ],
+        joins
+      )
+    );
+    return box;
+  }
+
+  // Each piece's Tm, worked out from the overlap the junction actually has.
+  function withTms(joins) {
+    return joins.map((j) => ({ ...j, tm: j.overlap ? D.tm(j.overlap) : null }));
+  }
+
+  function productSummary({ pieces, sequence, circular }) {
+    const s = PV.summary({ pieces, sequence, circular });
+    const order = s.pieces.map((r) => `${r.name} (${r.length} bp)`).join(" → ");
+    return U.callout(
+      `${s.length} bp ${s.circular ? "circular" : "linear"} product: ${order}${s.circular ? ` → ${s.pieces[0].name}` : ""}.`,
+      "success"
+    );
+  }
+
   function fragmentTable(frags, onSelect, selectedIndex, seqLength) {
     const wrap = (i) => (seqLength ? ((i % seqLength) + seqLength) % seqLength : i);
     return U.table(
@@ -1231,16 +1290,20 @@
           "success"
         )
       );
-      pastedOut.appendChild(
-        U.table(
-          [
-            { title: "Junction", render: (j) => `${j.after} → ${j.before}` },
-            { title: "Overlap", render: (j) => `${j.length} nt` },
-            { title: "Sequence", render: (j) => U.primerSpan("", j.overlap) },
-          ],
-          res.junctions
-        )
+      // The piece boundaries are not known here -- the primers decide them --
+      // so each junction is located by its own overlap instead.
+      const pastedJoins = withTms(
+        res.junctions.map((j) => {
+          const where = PV.contextOf(res.sequence, j.overlap, { circular: true });
+          return {
+            ...j,
+            gc: PV.gc(j.overlap),
+            occurrences: PV.occurrences(res.sequence, j.overlap, true),
+            ...(where || {}),
+          };
+        })
       );
+      pastedOut.appendChild(junctionView(pastedJoins, { minOverlap: +overlap.value || 15 }));
     });
 
     function buildPastedConstruct() {
@@ -1314,7 +1377,32 @@
           ],
           rows
         ),
-        U.callout(`Assembled construct: ${result.construct.sequence.length} bp. NEBuilder HiFi: 15–20 bp overlaps for 2–3 fragments; Gibson: 20–40 bp. PCR the inserts with these primers, then assemble.`, "none")
+        U.callout(`NEBuilder HiFi: 15–20 bp overlaps for 2–3 fragments; Gibson: 20–40 bp. PCR the inserts with these primers, then assemble.`, "none")
+      );
+      // The product, piece by piece, with every join checked (#42). Lengths
+      // come from the inputs and the sequence from the construct, so the
+      // preview describes what was actually built rather than re-deriving it.
+      let at = 0;
+      const previewPieces = pieces.map((piece, i) => {
+        const len = piece.seqData.sequence.length;
+        const seq = result.construct.sequence.slice(at, at + len);
+        at += len;
+        return { name: i === 0 ? `${name}_vector` : piece.seqData.name, sequence: seq };
+      });
+      const joins = withTms(
+        PV.junctions({
+          pieces: previewPieces,
+          sequence: result.construct.sequence,
+          overlap: +overlap.value || 20,
+          circular: true,
+        })
+      );
+      out.appendChild(
+        U.section(
+          "Product",
+          productSummary({ pieces: previewPieces, sequence: result.construct.sequence, circular: true }),
+          junctionView(joins, { minOverlap: +overlap.value || 15 })
+        )
       );
     });
 
