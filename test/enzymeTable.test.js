@@ -114,3 +114,34 @@ describe("choosing which name leads the row", () => {
     assert.strictEqual(g[0].name, "AanI");
   });
 });
+
+describe("the enzyme presets", () => {
+  const bsaI = { name: "BsaI", site: "ggtctc", topSnipOffset: 7, bottomSnipOffset: 11 };
+  const ecoRI2 = { name: "EcoRI", site: "gaattc", topSnipOffset: 1, bottomSnipOffset: 5 };
+  const aluI = { name: "AluI", site: "agct", topSnipOffset: 2, bottomSnipOffset: 2 };
+
+  it("spots a Type IIS enzyme by where it cuts, not by a flag", () => {
+    // the database carries no isType2S; cutting past the end of the site is the test
+    assert.strictEqual(E.cutsOutsideSite(bsaI), true);
+    assert.strictEqual(E.cutsOutsideSite(ecoRI2), false);
+  });
+
+  it("filters to Type IIS", () => {
+    const rows = [E.row(bsaI, [100]), E.row(ecoRI2, [200])];
+    assert.deepStrictEqual(E.filter(rows, { cuts: "type2s" }).map((r) => r.name), ["BsaI"]);
+  });
+
+  it("filters to the Golden Gate enzymes, including under an isoschizomer's name", () => {
+    const esp3I = { name: "Esp3I", site: "cgtctc", topSnipOffset: 7, bottomSnipOffset: 11 };
+    const rows = [E.row(bsaI, [100]), E.row(esp3I, [300]), E.row(ecoRI2, [200])];
+    assert.deepStrictEqual(E.filter(rows, { cuts: "goldengate" }).map((r) => r.name), ["BsaI", "Esp3I"]);
+    // BsmBI leads the row, Esp3I is its other name: still Golden Gate
+    const grouped = [{ ...E.row(esp3I, [300]), name: "BsmBI", key: "bsmbi", aliases: ["Esp3I"] }];
+    assert.strictEqual(E.filter(grouped, { cuts: "goldengate" }).length, 1);
+  });
+
+  it("filters to long recognition sites whatever the cut count", () => {
+    const rows = [E.row(ecoRI2, [1, 2, 3]), E.row(aluI, [1])];
+    assert.deepStrictEqual(E.filter(rows, { cuts: "long" }).map((r) => r.name), ["EcoRI"]);
+  });
+});

@@ -1602,6 +1602,7 @@
     const ET = window.oveEnzymeTable;
     const EV = window.oveEnzymeVendors;
     const VENDOR_KEY = "ove-enzyme-vendor";
+    const POOL_KEY = "ove-enzyme-pool";
     let vendorCode = "N"; // New England Biolabs, the usual freezer
     try {
       const saved = localStorage.getItem(VENDOR_KEY);
@@ -1609,6 +1610,22 @@
     } catch (e) {
       /* a blocked localStorage is not worth failing over */
     }
+    // which enzymes are even on the table: everything the database knows, or
+    // only what you could order. Catalogue enzymes by default -- a row for an
+    // enzyme nobody sells is a row you cannot act on.
+    const POOLS = [
+      { value: "commercial", label: "All commercial", test: (r) => EV.vendorsFor(r.name).length > 0 },
+      ...EV.VENDOR_LIST.map((v) => ({ value: v.code, label: v.name, test: (r) => EV.sells(v.code, r.name) })),
+      { value: "all", label: "Everything in the database", test: () => true },
+    ];
+    let poolValue = "commercial";
+    try {
+      const savedPool = localStorage.getItem(POOL_KEY);
+      if (savedPool && POOLS.some((p) => p.value === savedPool)) poolValue = savedPool;
+    } catch (e) {
+      /* no stored preference */
+    }
+    const poolPicker = U.select(POOLS.map((p) => ({ value: p.value, label: p.label })), poolValue, { width: 230 });
     const { seqData, name } = current(template);
     const doc = window.oveTabs && window.oveTabs.getActive();
     const editorApi = doc && doc.editor;
@@ -1632,8 +1649,12 @@
       })
       .filter(Boolean)
       .sort((a, b) => a.name.localeCompare(b.name));
+    const inPool = () => {
+      const pool = POOLS.find((p) => p.value === poolPicker.select.value) || POOLS[0];
+      return rows.filter(pool.test);
+    };
     const regroup = () =>
-      ET.groupIsoschizomers(rows, {
+      ET.groupIsoschizomers(inPool(), {
         preferred: D.COMMON_ENZYMES,
         sells: (n) => EV.sells(vendorCode, n),
         sold: (n) => EV.vendorsFor(n).length > 0,
@@ -1672,7 +1693,7 @@
       });
     };
     const draw = () => {
-      const source = shareRow.input.checked ? grouped : rows;
+      const source = shareRow.input.checked ? grouped : inPool();
       updateFilterCounts(source);
       const shown = ET.filter(source, { query: query.value, cuts: cutsFilter.select.value, selected });
       const capped = shown.slice(0, MAX_ROWS);
@@ -1715,7 +1736,7 @@
 
     function summary(shownCount, drawnCount) {
       const chosen = Object.keys(selected).length;
-      const source = shareRow.input.checked ? grouped : rows;
+      const source = shareRow.input.checked ? grouped : inPool();
       const cutters = source.filter((r) => r.cuts).length;
       const extra = shownCount !== undefined && drawnCount !== undefined && shownCount > drawnCount ? ` Showing the first ${drawnCount} of ${shownCount} \u2014 narrow the filter to see the rest.` : "";
       return `${cutters} of ${source.length} enzymes cut ${name}. ${chosen ? `${chosen} chosen for the map` : "Nothing chosen: the map shows OVE's own filter"}.${extra}`;
@@ -1729,6 +1750,15 @@
     query.addEventListener("input", draw);
     cutsFilter.select.addEventListener("change", draw);
     shareRow.input.addEventListener("change", draw);
+    poolPicker.select.addEventListener("change", () => {
+      try {
+        localStorage.setItem(POOL_KEY, poolPicker.select.value);
+      } catch (e) {
+        /* preference just will not stick */
+      }
+      grouped = regroup();
+      draw();
+    });
     vendorPicker.select.addEventListener("change", () => {
       vendorCode = vendorPicker.select.value;
       try {
@@ -1746,7 +1776,8 @@
       width: 940,
       body: [
         templatePicker("Sequence", "enzymes", template),
-        U.row(U.field("Filter", query, "name or recognition site"), U.field("Cuts", cutsFilter.el), U.field("Supplier", vendorPicker.el, "whose name to show"), shareRow.el),
+        U.row(U.field("Choose from", poolPicker.el, "which enzymes are on the table"), U.field("Show", cutsFilter.el), U.field("Filter", query, "name or recognition site")),
+      U.row(U.field("Name them as", vendorPicker.el, "whose catalogue name to show"), shareRow.el),
         countLine,
         tableBox,
         U.callout(
