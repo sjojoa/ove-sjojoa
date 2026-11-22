@@ -1555,7 +1555,96 @@
     });
   }
 
-  function openGelSimulator({ template } = {}) {
+  // --------------------------------------------------- check digest
+  // After a cloning, the question is which enzyme tells a right colony from
+  // a wrong one. Cut the construct every way the common enzymes allow, cut
+  // the parent the same way, and rank by what you could actually read off a
+  // gel (src/cloning/checkDigest.js does the scoring).
+  function openCheckDigest({ template } = {}) {
+    const { seqData: construct, name } = current(template);
+    const CD = window.oveCheckDigest;
+    const agarose = U.select(Object.keys(D.AGAROSE_RANGES).map((k) => ({ value: k, label: `${k}% agarose` })), "1", { width: 140 });
+    const pairsOn = U.checkbox("also try pairs of enzymes", true);
+    const out = h("div");
+    let parent = null;
+    const parentBox = h("div", { className: "ove-cl-hint" }, "No parent chosen: digests are ranked on readability alone.");
+    const picker = sequencePicker("Parent / empty vector (optional)", (sd) => {
+      parent = sd;
+      parentBox.textContent = `Parent: ${sd.name} \u2014 ${sd.sequence.length} bp`;
+      run();
+    });
+
+    const sizesOf = (sd, enzymes) => {
+      try {
+        const frags = D.digest(sd, enzymes);
+        return frags[0] && frags[0].uncut ? [] : frags.map((f) => f.size);
+      } catch (e) {
+        return [];
+      }
+    };
+
+    const run = wrapTry(() => {
+      const range = D.AGAROSE_RANGES[agarose.select.value] || D.AGAROSE_RANGES[1];
+      const cutters = D.COMMON_ENZYMES.filter((e) => sizesOf(construct, [e]).length);
+      const combos = cutters.map((e) => [e]);
+      if (pairsOn.input.checked) {
+        for (let i = 0; i < cutters.length; i++) {
+          for (let j = i + 1; j < cutters.length; j++) combos.push([cutters[i], cutters[j]]);
+        }
+      }
+      const ranked = CD.rank(
+        combos.map((enzymes) => ({
+          enzymes: enzymes,
+          bands: sizesOf(construct, enzymes),
+          referenceBands: parent ? sizesOf(parent, enzymes) : undefined,
+        })),
+        { range: range }
+      );
+      const top = ranked.filter((r) => r.score > -50).slice(0, 12);
+      out.innerHTML = "";
+      if (!top.length) {
+        out.appendChild(U.callout("None of the common enzymes gives a digest worth running on this construct.", "warning"));
+        return;
+      }
+      out.appendChild(
+        U.table(
+          [
+            { title: "Cut with", render: (r) => r.enzymes.join(" + ") },
+            { title: "Clone", render: (r) => r.bands.map((b) => `${b}`).join(", ") + " bp" },
+            { title: "Parent", render: (r) => (r.referenceBands ? r.referenceBands.slice().sort((a, b) => b - a).join(", ") + " bp" : "\u2013") },
+            {
+              title: "Verdict",
+              render: (r) =>
+                h("span", { className: r.verdict === "clear" ? "" : "ove-cl-warn", title: r.reasons.join("; ") }, r.verdict),
+            },
+            { title: "Why", render: (r) => (r.reasons.length ? r.reasons.join("; ") : "bands are well spread and all on scale") },
+            {
+              title: "",
+              render: (r) =>
+                U.button("Show on gel", () => openGelSimulator({ template: construct, withEnzymes: r.enzymes.join(", ") }), { icon: "timeline-bar-chart" }),
+            },
+          ],
+          top
+        )
+      );
+    });
+    agarose.select.addEventListener("change", run);
+    pairsOn.input.addEventListener("change", run);
+    run();
+
+    U.openDialog({
+      title: "Check Digest (which cut proves the clone)",
+      width: 980,
+      body: [
+        templatePicker("Clone", "checkDigest", template),
+        U.section("Compare against", picker, parentBox),
+        U.section("Gel", U.row(U.field("Agarose", agarose.el), pairsOn.el)),
+        out,
+      ],
+    });
+  }
+
+  function openGelSimulator({ template, withEnzymes } = {}) {
     const { seqData } = current(template);
     const agarose = U.select(Object.keys(D.AGAROSE_RANGES).map((k) => ({ value: k, label: `${k}% agarose` })), "1", { width: 140 });
     const ladder = U.select(Object.keys(D.LADDERS), "GeneRuler 1 kb Plus", { width: 200 });
@@ -1566,11 +1655,17 @@
         return false;
       }
     });
-    const lanes = [
-      { source: 0, enzymes: "" },
-      ...(singles[0] ? [{ source: 0, enzymes: singles[0] }] : []),
-      ...(singles[1] ? [{ source: 0, enzymes: `${singles[0]}, ${singles[1]}` }] : []),
-    ];
+    // arriving from the check digest: show the uncut clone beside that cut
+    const lanes = withEnzymes
+      ? [
+          { source: 0, enzymes: "" },
+          { source: 0, enzymes: withEnzymes },
+        ]
+      : [
+          { source: 0, enzymes: "" },
+          ...(singles[0] ? [{ source: 0, enzymes: singles[0] }] : []),
+          ...(singles[1] ? [{ source: 0, enzymes: `${singles[0]}, ${singles[1]}` }] : []),
+        ];
     const lanesBox = h("div");
     const gelBox = h("div", { style: { display: "flex", gap: "16px", alignItems: "flex-start" } });
 
@@ -1751,6 +1846,7 @@
     restriction: openRestrictionCloning,
     gibson: openGibson,
     gel: openGelSimulator,
+    checkDigest: openCheckDigest,
     codons: openCodonTable,
   };
   function open(tool) {
@@ -1768,6 +1864,7 @@
       { text: "Restriction Cloning (digest + ligate)…", icon: "cut", onClick: () => open("restriction") },
       { text: "Gibson / HiFi Assembly…", icon: "build", onClick: () => open("gibson") },
       "--",
+      { text: "Check Digest (which cut proves the clone)…", icon: "endorsed", onClick: () => open("checkDigest") },
       { text: "Agarose Gel Simulator…", icon: "timeline-bar-chart", onClick: () => open("gel") },
       { text: "Codon Usage Table…", icon: "th", onClick: () => open("codons") },
       "simulateDigestion",
