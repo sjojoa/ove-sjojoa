@@ -150,7 +150,25 @@
       window.oveActiveEditorName = doc.editorName;
       if (window.oveCloning) window.oveCloning.setEditor(doc.editor);
       restoreScroll(doc);
+      applySavedEnzymes(doc);
     }, 0);
+  }
+
+  // An enzyme set saved with the file (a COMMENT line) is what the map
+  // should show when the file is opened -- including enzymes that do not cut,
+  // which is the whole reason for choosing them.
+  function applySavedEnzymes(doc) {
+    if (!doc.editor || !window.oveEnzymeSet) return;
+    try {
+      const state = doc.editor.getState();
+      const names = window.oveEnzymeSet.read(state.sequenceData);
+      if (!names.length) return;
+      const already = window.oveEnzymeSet.fromFilter((state.restrictionEnzymes || {}).filteredRestrictionEnzymes);
+      if (already.length === names.length && already.every((n) => names.includes(n))) return;
+      doc.editor.updateEditor({ restrictionEnzymes: { filteredRestrictionEnzymes: window.oveEnzymeSet.toFilter(names) } });
+    } catch (e) {
+      console.warn("could not restore the saved enzyme set", e);
+    }
   }
 
   // ------------------------------------------------- where each tab was

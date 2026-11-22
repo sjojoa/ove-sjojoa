@@ -46,10 +46,16 @@
   // readable table into hundreds of rows saying the same thing. Enzymes that
   // recognise the same site and cut it in the same place share a row; the
   // one you are likeliest to have in the freezer leads it.
-  function groupIsoschizomers(rows, preferred = []) {
+  function groupIsoschizomers(rows, { preferred = [], sells, sold } = {}) {
     const rank = {};
     preferred.forEach((n, i) => (rank[String(n).toLowerCase()] = i));
-    const score = (r) => (rank[r.key] !== undefined ? rank[r.key] : 1000 + r.name.length);
+    // the name to lead with is the one you could order: your supplier's
+    // first, then anyone's, then whatever the database calls it
+    const score = (r) => {
+      if (sells && sells(r.name)) return rank[r.key] !== undefined ? rank[r.key] : 100 + r.name.length;
+      if (sold && sold(r.name)) return 1000 + r.name.length;
+      return rank[r.key] !== undefined ? 2000 + rank[r.key] : 3000 + r.name.length;
+    };
     const groups = new Map();
     (rows || []).forEach((r) => {
       const id = `${r.site}|${r.top}|${r.bottom}`;

@@ -84,14 +84,33 @@ describe("isoschizomers", () => {
   });
 
   it("leads the row with the name you are likelier to have", () => {
-    const g = E.groupIsoschizomers(rows, ["PsiI"]);
+    const g = E.groupIsoschizomers(rows, { preferred: ["PsiI"] });
     const ttataa = g.find((r) => r.site === "TTATAA");
     assert.strictEqual(ttataa.name, "PsiI");
     assert.deepStrictEqual(ttataa.aliases, ["AanI"]);
   });
 
   it("finds a row by the name of one of its isoschizomers", () => {
-    const g = E.groupIsoschizomers(rows, ["AanI"]);
+    const g = E.groupIsoschizomers(rows, { preferred: ["AanI"] });
     assert.deepStrictEqual(E.filter(g, { cuts: "any", query: "psi" }).map((r) => r.name), ["AanI"]);
+  });
+});
+
+describe("choosing which name leads the row", () => {
+  const aanI = { name: "AanI", site: "ttataa", topSnipOffset: 3, bottomSnipOffset: 3 };
+  const psiI = { name: "PsiI", site: "ttataa", topSnipOffset: 3, bottomSnipOffset: 3 };
+  const zzzI = { name: "ZzzI", site: "ttataa", topSnipOffset: 3, bottomSnipOffset: 3 };
+  const rows = [E.row(aanI, [10]), E.row(psiI, [10]), E.row(zzzI, [10])];
+
+  it("leads with the name your supplier sells", () => {
+    // NEB sells PsiI, Thermo sells AanI, nobody sells ZzzI
+    const g = E.groupIsoschizomers(rows, { sells: (n) => n === "PsiI", sold: (n) => n !== "ZzzI" });
+    assert.strictEqual(g[0].name, "PsiI");
+    assert.deepStrictEqual(g[0].aliases, ["AanI", "ZzzI"]);
+  });
+
+  it("falls back to a name someone sells when your supplier has none", () => {
+    const g = E.groupIsoschizomers(rows, { sells: () => false, sold: (n) => n === "AanI" });
+    assert.strictEqual(g[0].name, "AanI");
   });
 });

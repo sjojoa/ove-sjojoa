@@ -1600,6 +1600,15 @@
   // on the map where you will notice it.
   function openEnzymeTable({ template } = {}) {
     const ET = window.oveEnzymeTable;
+    const EV = window.oveEnzymeVendors;
+    const VENDOR_KEY = "ove-enzyme-vendor";
+    let vendorCode = "N"; // New England Biolabs, the usual freezer
+    try {
+      const saved = localStorage.getItem(VENDOR_KEY);
+      if (saved !== null) vendorCode = saved;
+    } catch (e) {
+      /* a blocked localStorage is not worth failing over */
+    }
     const { seqData, name } = current(template);
     const doc = window.oveTabs && window.oveTabs.getActive();
     const editorApi = doc && doc.editor;
@@ -1623,13 +1632,34 @@
       })
       .filter(Boolean)
       .sort((a, b) => a.name.localeCompare(b.name));
-    const grouped = ET.groupIsoschizomers(rows, D.COMMON_ENZYMES).sort((a, b) => a.name.localeCompare(b.name));
+    const regroup = () =>
+      ET.groupIsoschizomers(rows, {
+        preferred: D.COMMON_ENZYMES,
+        sells: (n) => EV.sells(vendorCode, n),
+        sold: (n) => EV.vendorsFor(n).length > 0,
+      }).sort((a, b) => a.name.localeCompare(b.name));
+    let grouped = regroup();
 
+    const vendorPicker = U.select(
+      [{ value: "", label: "Any supplier" }, ...EV.VENDOR_LIST.map((v) => ({ value: v.code, label: v.name }))],
+      vendorCode,
+      { width: 230 }
+    );
     const query = U.textInput("", { width: 220 });
     const shareRow = U.checkbox("isoschizomers share a row", true);
     const cutsFilter = U.select(ET.FILTERS.map((f) => ({ value: f.value, label: f.label })), "one-long", { width: 200 });
     const tableBox = h("div", { style: { maxHeight: "420px", overflow: "auto" } });
     const countLine = h("div", { className: "ove-cl-hint" });
+
+    const nameTitle = (r) => {
+      const who = EV.vendorsFor(r.name);
+      return [
+        who.length ? `Sold by ${who.join(", ")}` : "No supplier listed",
+        r.aliases.length ? `Same site and cut as ${r.aliases.join(", ")}` : null,
+      ]
+        .filter(Boolean)
+        .join("\n");
+    };
 
     const MAX_ROWS = 300;
     const draw = () => {
@@ -1658,9 +1688,8 @@
               render: (r) =>
                 h(
                   "span",
-                  { className: r.cuts ? "ove-cl-cutter" : "ove-cl-noncutter", title: r.aliases.length ? `Same site and cut as ${r.aliases.join(", ")}` : undefined },
-                  r.name,
-                  r.aliases.length ? h("span", { className: "ove-cl-noncutter" }, ` +${r.aliases.length}`) : null
+                  { className: r.cuts ? "ove-cl-cutter" : "ove-cl-noncutter", title: nameTitle(r) },
+                  r.name
                 ),
             },
             { title: "Site", render: (r) => h("span", { className: "ove-cl-seq" }, r.site) },
@@ -1690,6 +1719,16 @@
     query.addEventListener("input", draw);
     cutsFilter.select.addEventListener("change", draw);
     shareRow.input.addEventListener("change", draw);
+    vendorPicker.select.addEventListener("change", () => {
+      vendorCode = vendorPicker.select.value;
+      try {
+        localStorage.setItem(VENDOR_KEY, vendorCode);
+      } catch (e) {
+        /* preference just will not stick */
+      }
+      grouped = regroup();
+      draw();
+    });
     draw();
 
     U.openDialog({
@@ -1697,11 +1736,11 @@
       width: 940,
       body: [
         templatePicker("Sequence", "enzymes", template),
-        U.row(U.field("Filter", query, "name or recognition site"), U.field("Cuts", cutsFilter.el), shareRow.el),
+        U.row(U.field("Filter", query, "name or recognition site"), U.field("Cuts", cutsFilter.el), U.field("Supplier", vendorPicker.el, "whose name to show"), shareRow.el),
         countLine,
         tableBox,
         U.callout(
-          "Bold enzymes cut this sequence; faded ones do not. Choosing an enzyme that does not cut is deliberate \u2014 it stays on the map, so if an edit or an assembly ever creates that site, it appears where you will see it.",
+          "Bold enzymes cut this sequence; faded ones do not. Choosing an enzyme that does not cut is deliberate \u2014 it stays on the map, so if an edit or an assembly ever creates that site, it appears where you will see it. The set is saved with the sequence the next time you save it. Hover a name to see its other names and who sells it.",
           "none"
         ),
       ],
