@@ -460,6 +460,23 @@
     return concatSeqData(parts, { name, circular: true });
   }
 
+  // Why a ligation will not close, and what would. For one vector fragment,
+  // try every insert fragment both ways round and report which end fails:
+  // "these ends can't be ligated" is a dead end, "fragment 2 fits reversed"
+  // is an answer.
+  function insertFits({ vector, vectorFragment, insert, fragments }) {
+    const v = fragmentPiece(vector, vectorFragment, false);
+    return (fragments || []).map((frag) => {
+      const ways = [false, true].map((flip) => {
+        const ins = fragmentPiece(insert, frag, flip);
+        const left = endsCompatible(v.right, ins.left);
+        const right = endsCompatible(ins.right, v.left);
+        return { flip, left, right, fits: left && right, leftEnd: ins.left, rightEnd: ins.right };
+      });
+      return { fragment: frag, ways, fits: ways.some((w) => w.fits) };
+    });
+  }
+
   // Restriction cloning: returns products for each insert orientation that ligates.
   function restrictionClone({ vector, vectorFragment, insert, insertFragment, name }) {
     const products = [];
@@ -702,7 +719,7 @@
     tm, duplexDG, bestDimer, bestHairpin, analyzeOligo, annealingTemps, DEFAULT_CONDITIONS,
     designPrimers, PRIMER_DEFAULTS, getEnzyme, COMMON_ENZYMES, DEFAULT_LEADER, enzymesByName,
     cutPositions, digest, sliceSeqData, reverseSeqData, concatSeqData, fragmentPiece, endsCompatible,
-    ligateCircular, restrictionClone, CODON_TABLE, chooseCodon, designMutagenesis, mutateSeqData,
+    ligateCircular, restrictionClone, insertFits, CODON_TABLE, chooseCodon, designMutagenesis, mutateSeqData,
     annealingRegion, designGibson, LADDERS, AGAROSE_RANGES, migration, laneBands,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;

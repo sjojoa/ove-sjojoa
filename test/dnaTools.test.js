@@ -212,3 +212,25 @@ describe("dnaTools: gels", () => {
     assert.strictEqual(bands.reduce((s, b) => s + b.size, 0), vector.sequence.length);
   });
 });
+
+describe("dnaTools: why a ligation will not close", () => {
+  it("names the fragment that fits, and which way round", () => {
+    const backbone = d.digest(vector, ["XhoI", "XbaI"]).reduce((a, b) => (a.size > b.size ? a : b));
+    // sites the wrong way round, so only the reversed fragment can close
+    const insert = makeInsert("XhoI", "XbaI");
+    const frags = d.digest(insert, ["XhoI", "XbaI"]);
+    const report = d.insertFits({ vector, vectorFragment: backbone, insert, fragments: frags });
+    const fitting = report.filter((r) => r.fits);
+    assert.strictEqual(fitting.length, 1);
+    assert.strictEqual(fitting[0].ways.find((w) => w.fits).flip, true);
+  });
+
+  it("says which end clashes when nothing fits", () => {
+    const backbone = d.digest(vector, ["XhoI", "XbaI"]).reduce((a, b) => (a.size > b.size ? a : b));
+    const insert = makeInsert("EcoRI", "BamHI");
+    const frags = d.digest(insert, ["EcoRI", "BamHI"]);
+    const report = d.insertFits({ vector, vectorFragment: backbone, insert, fragments: frags });
+    assert.ok(report.every((r) => !r.fits));
+    assert.ok(report.every((r) => r.ways.every((w) => !w.left && !w.right)));
+  });
+});

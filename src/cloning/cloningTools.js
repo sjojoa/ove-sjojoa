@@ -1011,6 +1011,15 @@
     let insert = null;
     let vFrag = null;
     let iFrag = null;
+    let lastInsertFrags = [];
+    const endsVerdict = (way) =>
+      way.fits
+        ? "both ends fit"
+        : !way.left && !way.right
+        ? "neither end fits"
+        : way.left
+        ? `left end fits, right end (${describeEnd(way.rightEnd)}) does not`
+        : `right end fits, left end (${describeEnd(way.leftEnd)}) does not`;
 
     const digestVector = wrapTry(() => {
       const names = enzymeNames(vE1.input, vE2.input);
@@ -1035,6 +1044,7 @@
         // uncut linear insert (e.g. blunt PCR product)
         const frag = { index: 0, start: 0, end: insert.sequence.length, size: insert.sequence.length, left: { type: "blunt", seq: "", enzyme: "PCR end" }, right: { type: "blunt", seq: "", enzyme: "PCR end" } };
         iFrag = frag;
+        lastInsertFrags = [frag];
         iFragsBox.appendChild(fragmentTable([frag], (f) => (iFrag = f), 0));
         return;
       }
@@ -1044,6 +1054,7 @@
       const internal = frags.filter((f) => f.left && f.right && f.left.type !== "end" && f.right.type !== "end");
       const pick = (internal.length ? internal : frags).reduce((a, b) => (a.size > b.size ? a : b));
       iFrag = pick;
+      lastInsertFrags = frags;
       iFragsBox.appendChild(fragmentTable(frags, (f) => (iFrag = f), frags.indexOf(pick), insert.sequence.length));
     });
     [vE1, vE2].forEach((e) => e.input.addEventListener("change", digestVector));
@@ -1068,6 +1079,34 @@
             "danger"
           )
         );
+        // a dead end is not an answer: say whether any other fragment of this
+        // insert would close the circle, and which way round
+        const report = D.insertFits({ vector, vectorFragment: vFrag, insert, fragments: lastInsertFrags });
+        const fitting = report.filter((r) => r.fits);
+        if (fitting.length) {
+          out.appendChild(
+            U.callout(
+              `${fitting
+                .map((r) => {
+                  const way = r.ways.find((w) => w.fits);
+                  return `the ${r.fragment.size} bp fragment${way.flip ? ", reversed," : ""} would close it`;
+                })
+                .join("; ")}. Choose it in the Insert table above.`,
+              "primary"
+            )
+          );
+        } else {
+          out.appendChild(
+            U.table(
+              [
+                { title: "Insert fragment", render: (r) => `${r.fragment.size} bp` },
+                { title: "As cut", render: (r) => endsVerdict(r.ways[0]) },
+                { title: "Reversed", render: (r) => endsVerdict(r.ways[1]) },
+              ],
+              report
+            )
+          );
+        }
         return;
       }
       if (res.products.length === 2) out.appendChild(U.callout("The insert can go in both orientations (non-directional cloning) — screen colonies for the one you want.", "warning"));
