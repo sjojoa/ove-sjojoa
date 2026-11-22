@@ -1555,6 +1555,127 @@
     });
   }
 
+  // ------------------------------------------------------ enzyme table
+  // Which enzymes the map shows. Cutters are bold; a non-cutter can be
+  // chosen on purpose, so that if an edit ever creates that site it turns up
+  // on the map where you will notice it.
+  function openEnzymeTable({ template } = {}) {
+    const ET = window.oveEnzymeTable;
+    const { seqData, name } = current(template);
+    const doc = window.oveTabs && window.oveTabs.getActive();
+    const editorApi = doc && doc.editor;
+    const selected = {};
+    ((editorApi && editorApi.getState().restrictionEnzymes) || {}).filteredRestrictionEnzymes?.forEach((e) => {
+      if (e && e.value && !e.cutsThisManyTimes && e.value !== "type2s") selected[e.value.toLowerCase()] = true;
+    });
+
+    // one pass over the whole enzyme list; a 6 kb plasmid takes well under a
+    // second, and the answer only changes when the sequence does
+    const rows = Object.keys(D.enzymesByName)
+      .map((key) => {
+        const enz = D.enzymesByName[key];
+        let cuts = [];
+        try {
+          cuts = D.cutPositions(seqData, [enz.name]).map((c) => oneBased(Math.min(c.top, c.bottom)));
+        } catch (e) {
+          return null;
+        }
+        return ET.row(enz, cuts);
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const grouped = ET.groupIsoschizomers(rows, D.COMMON_ENZYMES).sort((a, b) => a.name.localeCompare(b.name));
+
+    const query = U.textInput("", { width: 220 });
+    const shareRow = U.checkbox("isoschizomers share a row", true);
+    const cutsFilter = U.select(ET.FILTERS.map((f) => ({ value: f.value, label: f.label })), "one-long", { width: 200 });
+    const tableBox = h("div", { style: { maxHeight: "420px", overflow: "auto" } });
+    const countLine = h("div", { className: "ove-cl-hint" });
+
+    const MAX_ROWS = 300;
+    const draw = () => {
+      const source = shareRow.input.checked ? grouped : rows;
+      const shown = ET.filter(source, { query: query.value, cuts: cutsFilter.select.value, selected });
+      const capped = shown.slice(0, MAX_ROWS);
+      tableBox.innerHTML = "";
+      tableBox.appendChild(
+        U.table(
+          [
+            {
+              title: "On map",
+              render: (r) => {
+                const box = U.checkbox("", !!selected[r.key]);
+                box.input.addEventListener("change", () => {
+                  if (box.input.checked) selected[r.key] = true;
+                  else delete selected[r.key];
+                  apply();
+                  countLine.textContent = summary();
+                });
+                return box.el;
+              },
+            },
+            {
+              title: "Name",
+              render: (r) =>
+                h(
+                  "span",
+                  { className: r.cuts ? "ove-cl-cutter" : "ove-cl-noncutter", title: r.aliases.length ? `Same site and cut as ${r.aliases.join(", ")}` : undefined },
+                  r.name,
+                  r.aliases.length ? h("span", { className: "ove-cl-noncutter" }, ` +${r.aliases.length}`) : null
+                ),
+            },
+            { title: "Site", render: (r) => h("span", { className: "ove-cl-seq" }, r.site) },
+            { title: "Overhang", render: (r) => r.overhang + (r.isType2S ? " \u00b7 Type IIS" : "") },
+            { title: "Cuts", render: (r) => String(r.cuts) },
+            { title: "Positions", render: (r) => (r.cuts ? r.positions.slice(0, 6).join(", ") + (r.cuts > 6 ? ` +${r.cuts - 6}` : "") : "\u2013") },
+          ],
+          capped
+        )
+      );
+      countLine.textContent = summary(shown.length, capped.length);
+    };
+
+    function summary(shownCount, drawnCount) {
+      const chosen = Object.keys(selected).length;
+      const source = shareRow.input.checked ? grouped : rows;
+      const cutters = source.filter((r) => r.cuts).length;
+      const extra = shownCount !== undefined && drawnCount !== undefined && shownCount > drawnCount ? ` Showing the first ${drawnCount} of ${shownCount} \u2014 narrow the filter to see the rest.` : "";
+      return `${cutters} of ${source.length} enzymes cut ${name}. ${chosen ? `${chosen} chosen for the map` : "Nothing chosen: the map shows OVE's own filter"}.${extra}`;
+    }
+
+    const apply = () => {
+      if (!editorApi) return;
+      editorApi.updateEditor({ restrictionEnzymes: { filteredRestrictionEnzymes: ET.toMapFilter(selected) } });
+    };
+
+    query.addEventListener("input", draw);
+    cutsFilter.select.addEventListener("change", draw);
+    shareRow.input.addEventListener("change", draw);
+    draw();
+
+    U.openDialog({
+      title: "Enzymes on the map",
+      width: 940,
+      body: [
+        templatePicker("Sequence", "enzymes", template),
+        U.row(U.field("Filter", query, "name or recognition site"), U.field("Cuts", cutsFilter.el), shareRow.el),
+        countLine,
+        tableBox,
+        U.callout(
+          "Bold enzymes cut this sequence; faded ones do not. Choosing an enzyme that does not cut is deliberate \u2014 it stays on the map, so if an edit or an assembly ever creates that site, it appears where you will see it.",
+          "none"
+        ),
+      ],
+      footer: [
+        U.button("Clear the map filter", () => {
+          Object.keys(selected).forEach((k) => delete selected[k]);
+          apply();
+          draw();
+        }, { icon: "filter-remove" }),
+      ],
+    });
+  }
+
   // --------------------------------------------------- check digest
   // After a cloning, the question is which enzyme tells a right colony from
   // a wrong one. Cut the construct every way the common enzymes allow, cut
@@ -1851,6 +1972,7 @@
     gibson: openGibson,
     gel: openGelSimulator,
     checkDigest: openCheckDigest,
+    enzymes: openEnzymeTable,
     codons: openCodonTable,
   };
   function open(tool) {
@@ -1868,6 +1990,7 @@
       { text: "Restriction Cloning (digest + ligate)…", icon: "cut", onClick: () => open("restriction") },
       { text: "Gibson / HiFi Assembly…", icon: "build", onClick: () => open("gibson") },
       "--",
+      { text: "Enzymes on the Map…", icon: "th-list", onClick: () => open("enzymes") },
       { text: "Check Digest (which cut proves the clone)…", icon: "endorsed", onClick: () => open("checkDigest") },
       { text: "Agarose Gel Simulator…", icon: "timeline-bar-chart", onClick: () => open("gel") },
       { text: "Codon Usage Table…", icon: "th", onClick: () => open("codons") },

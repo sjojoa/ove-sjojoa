@@ -402,3 +402,7 @@ details.ove-cl-details summary {
 .veCutMulti { opacity: 0.5; }
 .veCutBlunt { text-decoration: underline dotted; text-underline-offset: 2px; }
 .veCutType2s::after { content: "\21E5"; margin-left: 2px; opacity: 0.8; }
+
+/* Enzyme table: a cutter is worth reading, a non-cutter is there on purpose */
+.ove-cl-cutter { font-weight: 700; }
+.ove-cl-noncutter { opacity: 0.55; }
