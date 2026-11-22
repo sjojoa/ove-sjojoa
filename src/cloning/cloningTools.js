@@ -1574,18 +1574,22 @@
       run();
     });
 
-    const sizesOf = (sd, enzymes) => {
+    // an enzyme that misses the parent still leaves it as one whole-length
+    // band -- treating that as an empty lane would make every clone band
+    // look new
+    const bandsOf = (sd, enzymes) => {
       try {
         const frags = D.digest(sd, enzymes);
-        return frags[0] && frags[0].uncut ? [] : frags.map((f) => f.size);
+        if (frags[0] && frags[0].uncut) return { uncut: true, sizes: [sd.sequence.length] };
+        return { uncut: false, sizes: frags.map((f) => f.size) };
       } catch (e) {
-        return [];
+        return { uncut: true, sizes: [sd.sequence.length] };
       }
     };
 
     const run = wrapTry(() => {
       const range = D.AGAROSE_RANGES[agarose.select.value] || D.AGAROSE_RANGES[1];
-      const cutters = D.COMMON_ENZYMES.filter((e) => sizesOf(construct, [e]).length);
+      const cutters = D.COMMON_ENZYMES.filter((e) => !bandsOf(construct, [e]).uncut);
       const combos = cutters.map((e) => [e]);
       if (pairsOn.input.checked) {
         for (let i = 0; i < cutters.length; i++) {
@@ -1595,8 +1599,8 @@
       const ranked = CD.rank(
         combos.map((enzymes) => ({
           enzymes: enzymes,
-          bands: sizesOf(construct, enzymes),
-          referenceBands: parent ? sizesOf(parent, enzymes) : undefined,
+          bands: bandsOf(construct, enzymes).sizes,
+          referenceBands: parent ? bandsOf(parent, enzymes).sizes : undefined,
         })),
         { range: range }
       );

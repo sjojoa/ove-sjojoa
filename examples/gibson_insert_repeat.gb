@@ -1,0 +1,19 @@
+LOCUS       gibson_insert_repeat  720 bp    DNA     linear   UNA 21-NOV-2026
+DEFINITION  gibson_insert_repeat.
+FEATURES             Location/Qualifiers
+     misc_feature    701..720
+                     /label="tail repeats vector 301..320"
+ORIGIN
+        1 accggtgcct tcttagtgct agcgcggtgt agtgatactg tttagaagac gtagaagacc
+       61 taaacggcgg tccccattgg cccgagtaag gttggaaagg cgagtagatc acgagctcta
+      121 cggtgcgatt tcaacctcac taagccggct tctagatggc gcttcccgct gaataagggc
+      181 cctactccgg ctagagtaaa ctaaatcgtg cgctcagaag cggcaggcat gtcaggatat
+      241 atcttcgcaa accaggagca aactgtatat tggcggcgtc actaaccacc caggggacct
+      301 ggatctaggt gtacgtcaac cccaacgcgc gagcacactc ctgtttgtca tggagccttg
+      361 aggactatta ccgtatcctc aattctggac caatccggac ttcgctttta tattccagcg
+      421 gcaaagcgtg ggattttctg tcgagggcgg ccgatgtggg ctagagatga gtcaagtgac
+      481 tttccccaca tcttgcaacg gtattgaaac atgcgtttaa gttaaaagaa aacagttttc
+      541 gttaaccgga tatcttctta taaaaaacaa ccgtattcat tttttcgcac tcattccagt
+      601 agccgtctgg ccaggcattt tctaagtgga cccgaacatt cagtagcgtg tgtggagcgt
+      661 gcgtaagagg atacaccgtt atcgactgcg gttgaagcct gacaatattc cctggttcac
+//
