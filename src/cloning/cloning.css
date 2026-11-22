@@ -370,6 +370,29 @@ details.ove-cl-details summary {
 .ove-cl-flank {
   opacity: 0.55;
 }
+/* Codon usage table: the classic 4x4x4 grid, one cell per first/second base */
+.ove-cl-codon-table { border-collapse: collapse; width: 100%; }
+.ove-cl-codon-table th {
+  background: #f5f8fa;
+  border: 1px solid #d8e1e8;
+  font-weight: 600;
+  padding: 3px 6px;
+  text-align: center;
+}
+.ove-cl-codon-third { font-weight: 400; letter-spacing: 2px; writing-mode: vertical-rl; }
+.ove-cl-codon-cell { border: 1px solid #d8e1e8; padding: 0; vertical-align: top; }
+.ove-cl-codon {
+  display: grid;
+  grid-template-columns: 4em 1fr 3em;
+  gap: 6px;
+  padding: 2px 6px;
+  align-items: baseline;
+}
+.ove-cl-codon-seq { font-family: monospace; letter-spacing: 1px; }
+.ove-cl-codon-aa { color: #5c7080; }
+.ove-cl-codon-freq { font-variant-numeric: tabular-nums; text-align: right; }
+.ove-cl-codon-best { background: #d4f1d4; font-weight: 600; }
+.ove-cl-codon-best .ove-cl-codon-aa { color: #1d7324; }
 /* Cut-site labels in the maps. OVE already colours them by how often the
    enzyme cuts (salmon = once, blue = twice, grey = more); these add the
    things colour does not say: how hard the cut is to miss, whether it leaves

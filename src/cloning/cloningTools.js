@@ -1468,6 +1468,93 @@
   }
 
   // ---------------------------------------------------------------- gel
+  // ------------------------------------------------------- codon usage
+  // The classic 4x4x4 codon table, one species at a time, with each amino
+  // acid's commonest codon in green. Read-only on purpose: it answers "what
+  // does this host prefer" without pulling a whole optimizer into the app.
+  const BASES = ["T", "C", "A", "G"];
+  const AA_NAMES = {
+    A: "Ala", R: "Arg", N: "Asn", D: "Asp", C: "Cys", Q: "Gln", E: "Glu", G: "Gly",
+    H: "His", I: "Ile", L: "Leu", K: "Lys", M: "Met", F: "Phe", P: "Pro", S: "Ser",
+    T: "Thr", W: "Trp", Y: "Tyr", V: "Val", "*": "Stop",
+  };
+
+  function codonGrid(species) {
+    const CU = window.oveCodonUsage;
+    const best = CU.favourites(species.codons, D.CODON_TABLE);
+    const cell = (first, second) =>
+      h(
+        "td",
+        { className: "ove-cl-codon-cell" },
+        BASES.map((third) => {
+          const codon = first + second + third;
+          const aa = D.CODON_TABLE[codon];
+          const freq = species.codons[codon];
+          return h(
+            "div",
+            { className: ["ove-cl-codon", best[codon] && "ove-cl-codon-best"].filter(Boolean).join(" ") },
+            h("span", { className: "ove-cl-codon-seq" }, codon),
+            h("span", { className: "ove-cl-codon-aa" }, aa === "*" ? "Stop (*)" : `${AA_NAMES[aa]} (${aa})`),
+            h("span", { className: "ove-cl-codon-freq" }, freq.toFixed(2))
+          );
+        })
+      );
+    return h(
+      "table",
+      { className: "ove-cl-codon-table" },
+      h("thead", null, h("tr", null, h("th", null, ""), ...BASES.map((b) => h("th", null, b)), h("th", null, ""))),
+      h(
+        "tbody",
+        null,
+        BASES.map((first) =>
+          h(
+            "tr",
+            null,
+            h("th", null, first),
+            ...BASES.map((second) => cell(first, second)),
+            h("th", { className: "ove-cl-codon-third" }, BASES.join(" "))
+          )
+        )
+      )
+    );
+  }
+
+  function codonTsv(species) {
+    const CU = window.oveCodonUsage;
+    const best = CU.favourites(species.codons, D.CODON_TABLE);
+    const rows = Object.keys(species.codons)
+      .sort()
+      .map((c) => [c, D.CODON_TABLE[c], species.codons[c].toFixed(2), best[c] ? "most used" : ""].join("\t"));
+    return ["codon\tamino acid\tfraction\tnote", ...rows].join("\n");
+  }
+
+  function openCodonTable() {
+    const CU = window.oveCodonUsage;
+    const picker = U.select(CU.SPECIES.map((s) => ({ value: s.id, label: s.label })), "human", { width: 320 });
+    const box = h("div");
+    const draw = () => {
+      box.innerHTML = "";
+      box.appendChild(codonGrid(CU.byId(picker.select.value)));
+    };
+    picker.select.addEventListener("change", draw);
+    draw();
+    U.openDialog({
+      title: "Codon Usage Table",
+      width: 980,
+      body: [
+        U.row(U.field("Species", picker.el)),
+        box,
+        U.callout(
+          "Fractions are per amino acid \u2014 the six Leu codons add up to 1, not the whole table. Green is the commonest codon for that amino acid. Counted genome-wide over GenBank coding sequences (Kazusa), so it is an average, not a guide to any one gene.",
+          "none"
+        ),
+      ],
+      footer: [
+        U.button("Copy table", () => U.copyText(codonTsv(CU.byId(picker.select.value)), "Codon table copied"), { icon: "clipboard" }),
+      ],
+    });
+  }
+
   function openGelSimulator({ template } = {}) {
     const { seqData } = current(template);
     const agarose = U.select(Object.keys(D.AGAROSE_RANGES).map((k) => ({ value: k, label: `${k}% agarose` })), "1", { width: 140 });
@@ -1664,6 +1751,7 @@
     restriction: openRestrictionCloning,
     gibson: openGibson,
     gel: openGelSimulator,
+    codons: openCodonTable,
   };
   function open(tool) {
     if (!editor) return U.toast("Editor not ready yet", "warning");
@@ -1681,6 +1769,7 @@
       { text: "Gibson / HiFi Assembly…", icon: "build", onClick: () => open("gibson") },
       "--",
       { text: "Agarose Gel Simulator…", icon: "timeline-bar-chart", onClick: () => open("gel") },
+      { text: "Codon Usage Table…", icon: "th", onClick: () => open("codons") },
       "simulateDigestion",
       "simulatePCR",
     ],
