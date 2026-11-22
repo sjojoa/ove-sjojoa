@@ -478,7 +478,20 @@
           forward: !flip,
           notes: { note: ["Inserted by restriction cloning"] },
         });
-        products.push({ orientation: flip ? "reverse" : "forward", sequenceData: withMarker });
+        products.push({
+          orientation: flip ? "reverse" : "forward",
+          sequenceData: withMarker,
+          // where the two pieces sit, and what each ligation junction is made
+          // of, so a dialog can show the product before anyone orders anything
+          pieces: [
+            { name: vector.name || "vector", length: vLen },
+            { name: `${insert.name || "insert"}${flip ? " (reverse)" : ""}`, length: insertLen },
+          ],
+          joins: [
+            { overhang: (v.right && v.right.seq) || "", enzymes: [v.right && v.right.enzyme, ins.left && ins.left.enzyme] },
+            { overhang: (ins.right && ins.right.seq) || "", enzymes: [ins.right && ins.right.enzyme, v.left && v.left.enzyme] },
+          ],
+        });
       }
     }
     const selfLigates = !!ligateCircular([fragmentPiece(vector, vectorFragment, false)], "self");
