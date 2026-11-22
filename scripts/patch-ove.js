@@ -130,6 +130,26 @@ const patches = [
     to: "}, matchesTotal > 0 ? matchNumber + 1 : 0, \"/\", matchesTotal), window.oveMismatchFind && window.oveMismatchFind.activeDetail(react_default.a), /*#__PURE__*/react_default.a.createElement(buttons_Button, {\n      \"data-test\": \"veFindPreviousMatchButton\",",
   },
   {
+    // Amino-acid search (src/features/proteinSearch.js). OVE's own AA search
+    // reports a hit in every reading frame, most of which encode nothing in
+    // the construct. Keep the hits whose frame is actually on screen.
+    name: "amino-acid search is kept to the frames on screen",
+    from: "function searchLayersSelector(sequence, isCircular, isOpen, searchString, ambiguousOrLiteral, dnaOrAA, isProtein, proteinSequence, oveMismatches) {",
+    to: "function searchLayersSelector(sequence, isCircular, isOpen, searchString, ambiguousOrLiteral, dnaOrAA, isProtein, proteinSequence, oveMismatches, oveFrameTranslations, oveAnnotationVisibility, oveFeatures, oveMinimumOrfSize) {",
+  },
+  {
+    // ...and the scope has to reach the selector, or it would be memoised on
+    // the old frames and never recompute when one is switched on.
+    name: "the displayed frames feed the search selector",
+    from: "}, function (state) {\n  return state.findTool && state.findTool.oveMismatches;\n}, searchLayersSelector));",
+    to: "}, function (state) {\n  return state.findTool && state.findTool.oveMismatches;\n}, function (state) {\n  return state.frameTranslations;\n}, function (state) {\n  return state.annotationVisibility;\n}, function (state) {\n  return state.sequenceData.features;\n}, function (state) {\n  return state.minimumOrfSize;\n}, searchLayersSelector));",
+  },
+  {
+    name: "out-of-frame amino-acid hits are dropped",
+    from: "  return matches.map(function (match) {\n    return searchLayersSelector_extends({}, match, {\n      forward: !match.bottomStrand,",
+    to: "  if (dnaOrAA !== \"DNA\" && window.oveProteinSearch) {\n    matches = window.oveProteinSearch.inScope(matches, {\n      sequence: sequence,\n      frames: window.oveProteinSearch.framesShown(oveFrameTranslations),\n      features: oveFeatures,\n      orfsShown: !!((oveAnnotationVisibility || {}).orfs || (oveAnnotationVisibility || {}).orfTranslations),\n      minimumOrfSize: oveMinimumOrfSize\n    });\n  }\n  return matches.map(function (match) {\n    return searchLayersSelector_extends({}, match, {\n      forward: !match.bottomStrand,",
+  },
+  {
     // Simulate PCR could only use primers that were already annotations.
     // src/features/pastedPrimers.js adds a paste box and hands the tool a
     // primer placed on the template; `bases` carries any 5' tail, which the

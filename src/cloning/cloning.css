@@ -361,6 +361,15 @@ details.ove-cl-details summary {
   display: none;
 }
 
+/* Sequence across an assembly junction: the overlap is coloured by
+   primerSpan, the bases either side come from the two parents. */
+.ove-cl-seq {
+  font-family: Menlo, Monaco, "Courier New", monospace;
+  white-space: nowrap;
+}
+.ove-cl-flank {
+  opacity: 0.55;
+}
 /* Cut-site labels in the maps. OVE already colours them by how often the
    enzyme cuts (salmon = once, blue = twice, grey = more); these add the
    things colour does not say: how hard the cut is to miss, whether it leaves

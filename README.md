@@ -40,6 +40,16 @@ Calculations in [`src/cloning/dnaTools.js`](src/cloning/dnaTools.js), UI in `clo
   Also works the other way round: **"I already have the primers"** takes the pair you
   ordered and tells you what it makes
 - **Restriction Cloning** — digest, pick fragments, ligate; models sticky/blunt/Type IIS ends
+- **Gibson/HiFi shows the product before you order anything**
+  ([`src/cloning/productPreview.js`](src/cloning/productPreview.js)) — a **Product**
+  section with the finished size and topology, the pieces in assembly order, and every
+  junction: overlap length, Tm, GC, and the sequence across the join with the overlap
+  coloured and the flanking bases from each parent either side, so a fusion's reading
+  frame can be eyed before primers are ordered. Each junction is checked, and the one
+  that matters most is **uniqueness** — an overlap that occurs more than once in the
+  product can join the wrong two pieces, which is how an assembly comes back scrambled.
+  Short overlaps, overlaps below 48 °C and overlaps outside 25–75% GC are called out
+  too. Both modes use it: overlaps designed here, and primers designed elsewhere
   and warns about non-directional cloning and vector self-ligation
 - **Gibson / HiFi Assembly** — overlap primers and the assembled construct. Also
   **"I already have the primers"**: one slot per PCR, each with its own template, and the
@@ -217,6 +227,18 @@ Owczarzy (2008) salt correction, and match Biopython's `Tm_NN` to within 0.001 �
   hover title. Both strands, ambiguity codes honoured in Ambiguous mode, origin-wrapping
   hits on circular sequences. A 50 kb sequence against a 20-mer at ≤ 2 mismatches takes
   about 9 ms.
+- **Amino-acid search, kept to the frames on screen**
+  ([`src/features/proteinSearch.js`](src/features/proteinSearch.js)) — switch the find
+  bar to **AA** and paste a peptide, a tag or a domain to find where it is encoded, with
+  no back-translating by hand. One peptide maps to many DNA sequences, so this is a
+  translate-and-compare search rather than a string search, and every reading frame
+  answers it: in a test plasmid a four-residue query hit twice and a three-residue one
+  eight times, nearly all in frames that encode nothing in the construct. A hit only
+  counts if you can see the frame it sits in — a +1/+2/+3 row you have turned on, a CDS
+  feature's own translation, or an ORF row — which took those two queries to one hit and
+  four. Turn all six frame rows on and you get the unscoped search back. With nothing on
+  screen and no CDS annotated there is nothing to scope against, so every hit is left
+  alone rather than all of them being hidden.
 - **File → Import Sequence takes a paste, not only a file**
   ([`src/features/importSequence.js`](src/features/importSequence.js)). A sequence usually
   arrives in an email or an order confirmation, so the dialog leads with a paste box that
