@@ -40,6 +40,16 @@ Calculations in [`src/cloning/dnaTools.js`](src/cloning/dnaTools.js), UI in `clo
   Also works the other way round: **"I already have the primers"** takes the pair you
   ordered and tells you what it makes
 - **Restriction Cloning** — digest, pick fragments, ligate; models sticky/blunt/Type IIS ends
+- **Gibson/HiFi shows the product before you order anything**
+  ([`src/cloning/productPreview.js`](src/cloning/productPreview.js)) — a **Product**
+  section with the finished size and topology, the pieces in assembly order, and every
+  junction: overlap length, Tm, GC, and the sequence across the join with the overlap
+  coloured and the flanking bases from each parent either side, so a fusion's reading
+  frame can be eyed before primers are ordered. Each junction is checked, and the one
+  that matters most is **uniqueness** — an overlap that occurs more than once in the
+  product can join the wrong two pieces, which is how an assembly comes back scrambled.
+  Short overlaps, overlaps below 48 °C and overlaps outside 25–75% GC are called out
+  too. Both modes use it: overlaps designed here, and primers designed elsewhere
   and warns about non-directional cloning and vector self-ligation
 - **Gibson / HiFi Assembly** — overlap primers and the assembled construct. Also
   **"I already have the primers"**: one slot per PCR, each with its own template, and the
