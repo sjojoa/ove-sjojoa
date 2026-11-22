@@ -1594,6 +1594,167 @@
     });
   }
 
+  // ------------------------------------------------------- golden gate
+  // One pot, one enzyme, parts that carry their own overhangs. The work is
+  // not the ligation -- src/cloning/goldenGate.js already decides the order
+  // -- it is saying plainly what the overhangs will do.
+  function openGoldenGate({ template } = {}) {
+    const GG = window.oveGoldenGate;
+    const { seqData: vector, name } = current(template);
+    const enzymeIn = enzymeInput("BsaI", vector);
+    const productName = U.textInput(`${name}_assembly`, { width: 220 });
+    const partsBox = h("div");
+    const out = h("div");
+    const inserts = [];
+
+    const renderParts = () => {
+      partsBox.innerHTML = "";
+      if (!inserts.length) {
+        partsBox.appendChild(h("div", { className: "ove-cl-hint" }, "No parts yet \u2014 add the plasmids (or PCR products) carrying them."));
+        return;
+      }
+      partsBox.appendChild(
+        U.table(
+          [
+            { title: "Part", render: (p) => p.name },
+            { title: "Length", render: (p) => `${p.seqData.sequence.length} bp` },
+            {
+              title: "",
+              render: (p) =>
+                U.button("Remove", () => {
+                  inserts.splice(inserts.indexOf(p), 1);
+                  renderParts();
+                }, { icon: "cross" }),
+            },
+          ],
+          inserts
+        )
+      );
+    };
+    renderParts();
+
+    const picker = sequencePicker("Add a part", (sd) => {
+      inserts.push({ name: sd.name || `part ${inserts.length + 1}`, seqData: sd });
+      renderParts();
+    });
+
+    // every fragment of this input that could sit inside the circle
+    const candidatesOf = (seqData, enzyme) => {
+      const frags = D.digest(seqData, [enzyme]);
+      if (frags[0] && frags[0].uncut) return [];
+      return frags.filter(GG.usable).map((f) => ({ left: f.left, right: f.right, size: f.size, frag: f }));
+    };
+
+    const assemble = wrapTry(() => {
+      out.innerHTML = "";
+      const enzyme = enzymeIn.input.value.trim();
+      if (!enzyme) throw new Error("Choose a Type IIS enzyme (BsaI, BsmBI, BbsI\u2026)");
+      checkEnzymes([enzyme]);
+      if (!window.oveEnzymeTable.cutsOutsideSite(D.getEnzyme(enzyme))) {
+        out.appendChild(U.callout(`${enzyme} cuts inside its own recognition site, so it cannot leave the custom overhangs Golden Gate needs.`, "warning"));
+      }
+      if (!inserts.length) throw new Error("Add at least one part");
+
+      const parts = [{ name: `${name} (vector)`, seqData: vector }, ...inserts].map((p) => ({
+        name: p.name,
+        seqData: p.seqData,
+        candidates: candidatesOf(p.seqData, enzyme),
+      }));
+      const missed = parts.filter((p) => !p.candidates.length);
+      if (missed.length) {
+        out.appendChild(U.callout(`${enzyme} does not release anything from ${missed.map((p) => p.name).join(", ")}. A part needs a site on both sides, pointing inwards.`, "danger"));
+        return;
+      }
+
+      const order = GG.chain(parts);
+      if (!order) {
+        const stuck = GG.unmatched(parts);
+        out.appendChild(
+          U.callout(
+            stuck.length
+              ? `These parts do not make a circle: ${stuck.map((u) => `${u.name}'s ${u.overhang} overhang has nothing to join`).join("; ")}.`
+              : "These parts do not make a circle. Check that each overhang appears on exactly two parts.",
+            "danger"
+          )
+        );
+        out.appendChild(overhangTable(parts));
+        return;
+      }
+
+      GG.problems(order).forEach((p) => out.appendChild(U.callout(p.text, p.level)));
+
+      const pieces = order.map((step) => D.fragmentPiece(parts[step.index].seqData, step.fragment.frag, false));
+      const product = D.ligateCircular(pieces, productName.value || "assembly");
+      if (!product) throw new Error("The parts line up but will not ligate \u2014 please report this sequence");
+
+      // the enzyme sites go with the carrier plasmids: if any survive, the
+      // product will be cut again in the same pot
+      const leftover = D.cutPositions(product, [enzyme]).length;
+      out.appendChild(
+        U.callout(
+          leftover
+            ? `${leftover} ${enzyme} site${leftover > 1 ? "s" : ""} survive in the product, so it will be cut again in the pot. A part should carry its sites outside the piece being assembled.`
+            : `No ${enzyme} sites left in the product, so it is safe from the enzyme once assembled.`,
+          leftover ? "danger" : "success"
+        )
+      );
+
+      const previewPieces = order.map((step, i) => ({
+        name: step.name,
+        sequence: pieces[i].full.sequence.slice(0, pieces[i].full.sequence.length - ((pieces[i].right && pieces[i].right.seq.length) || 0)),
+      }));
+      out.appendChild(productSummary({ pieces: previewPieces, sequence: product.sequence, circular: true }));
+      out.appendChild(
+        ligationView(
+          PV.ligationJoins({
+            pieces: previewPieces.map((p) => ({ name: p.name, length: p.sequence.length })),
+            joins: order.map((step) => ({ overhang: (step.fragment.right && step.fragment.right.seq) || "", enzymes: [enzyme] })),
+            sequence: product.sequence,
+            circular: true,
+          })
+        )
+      );
+      out.appendChild(
+        h(
+          "div",
+          { style: { display: "flex", gap: "6px", marginTop: "8px" } },
+          U.button("Open product", () => openInNewWindow(product), { intent: "primary", icon: "document-open" }),
+          U.button("Save product\u2026", () => saveSeqToFile(product, productName.value || "assembly"), { icon: "floppy-disk" })
+        )
+      );
+    });
+
+    function overhangTable(parts) {
+      const rows = [];
+      parts.forEach((p) =>
+        p.candidates.forEach((c) =>
+          rows.push({ name: p.name, size: c.size, left: (c.left && c.left.seq) || "blunt", right: (c.right && c.right.seq) || "blunt" })
+        )
+      );
+      return U.table(
+        [
+          { title: "Part", render: (r) => r.name },
+          { title: "Fragment", render: (r) => `${r.size} bp` },
+          { title: "Left overhang", render: (r) => h("span", { className: "ove-cl-seq" }, r.left) },
+          { title: "Right overhang", render: (r) => h("span", { className: "ove-cl-seq" }, r.right) },
+        ],
+        rows
+      );
+    }
+
+    U.openDialog({
+      title: "Golden Gate / MoClo Assembly",
+      width: 940,
+      body: [
+        templatePicker("Destination vector", "goldenGate", template),
+        U.section("Enzyme", U.row(U.field("Type IIS enzyme", enzymeIn.el, "BsaI, BsmBI, BbsI\u2026"), U.field("Product name", productName))),
+        U.section("Parts", picker, partsBox),
+        out,
+      ],
+      footer: [U.button("Assemble", assemble, { intent: "primary", icon: "build" })],
+    });
+  }
+
   // ------------------------------------------------------ enzyme table
   // Which enzymes the map shows. Cutters are bold; a non-cutter can be
   // chosen on purpose, so that if an edit ever creates that site it turns up
@@ -2092,6 +2253,7 @@
     gel: openGelSimulator,
     checkDigest: openCheckDigest,
     enzymes: openEnzymeTable,
+    goldenGate: openGoldenGate,
     codons: openCodonTable,
   };
   function open(tool) {
@@ -2108,6 +2270,7 @@
       "--",
       { text: "Restriction Cloning (digest + ligate)…", icon: "cut", onClick: () => open("restriction") },
       { text: "Gibson / HiFi Assembly…", icon: "build", onClick: () => open("gibson") },
+      { text: "Golden Gate / MoClo Assembly…", icon: "layout-hierarchy", onClick: () => open("goldenGate") },
       "--",
       { text: "Enzymes on the Map…", icon: "th-list", onClick: () => open("enzymes") },
       { text: "Check Digest (which cut proves the clone)…", icon: "endorsed", onClick: () => open("checkDigest") },

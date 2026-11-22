@@ -327,10 +327,24 @@
 
   function cutPositions(seqData, enzymeNames) {
     const cuts = [];
+    const n = seqData.sequence.length;
+    const circular = !!seqData.circular;
+    const wrap = (p) => ((p % n) + n) % n;
     for (const name of enzymeNames) {
       const enz = getEnzyme(name);
-      su.cutSequenceByRestrictionEnzyme(seqData.sequence, !!seqData.circular, enz).forEach((c) => {
-        cuts.push({ enzyme: enz.name, top: c.topSnipPosition, bottom: c.bottomSnipPosition });
+      su.cutSequenceByRestrictionEnzyme(seqData.sequence, circular, enz).forEach((c) => {
+        let top = wrap(c.topSnipPosition);
+        let bottom = wrap(c.bottomSnipPosition);
+        // A cut sitting on the origin comes back with one strand at 0 and the
+        // other at the far end of the sequence. An overhang is a few bases,
+        // never half a plasmid, so that gap means the cut straddles the
+        // origin: carry the later strand back round, or the "overhang" is
+        // read as the whole plasmid.
+        if (circular && Math.abs(top - bottom) > n / 2) {
+          if (top > bottom) top -= n;
+          else bottom -= n;
+        }
+        cuts.push({ enzyme: enz.name, top, bottom });
       });
     }
     const key = (c) => Math.min(c.top, c.bottom);

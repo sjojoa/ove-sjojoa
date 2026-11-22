@@ -234,3 +234,34 @@ describe("dnaTools: why a ligation will not close", () => {
     assert.ok(report.every((r) => r.ways.every((w) => !w.left && !w.right)));
   });
 });
+
+describe("dnaTools: a cut on the origin", () => {
+  // The origin of a plasmid is an arbitrary place to start writing it down,
+  // so a site can straddle it. The two strands then come back from opposite
+  // ends of the sequence, and the overhang used to be read as the whole
+  // plasmid -- which silently produced ends that would ligate to nothing.
+  const body = "ACGTTGCATGCAAGCTTGGCTAGCATCGATCAGCTAGCTTAGCATCAGCTACGATCAGCATCAGCATCGACTAGCTACGATCAGCATCAGCATCGATCAG";
+  const atOrigin = { name: "origin", circular: true, sequence: "AATTC" + body + "G" }; // G^AATTC spanning base 1
+
+  it("leaves a four-base overhang, not the whole plasmid", () => {
+    const [frag] = d.digest(atOrigin, ["EcoRI"]);
+    assert.strictEqual(frag.left.seq, "AATT");
+    assert.strictEqual(frag.right.seq, "AATT");
+    assert.strictEqual(frag.left.type, "5'");
+  });
+
+  it("still accounts for every base", () => {
+    const frags = d.digest(atOrigin, ["EcoRI"]);
+    assert.strictEqual(
+      frags.reduce((total, f) => total + f.size, 0),
+      atOrigin.sequence.length
+    );
+  });
+
+  it("gives an end that can be ligated to an ordinary EcoRI end", () => {
+    const ordinary = { name: "plain", circular: true, sequence: body + "GAATTC" + body };
+    const [a] = d.digest(atOrigin, ["EcoRI"]);
+    const [b] = d.digest(ordinary, ["EcoRI"]);
+    assert.ok(d.endsCompatible(a.right, b.left));
+  });
+});
