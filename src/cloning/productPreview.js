@@ -94,6 +94,63 @@
     return joins;
   }
 
+  // Ligation junctions. Unlike a Gibson overlap, a sticky end is trimmed off
+  // the left piece before the join, so the overhang bases belong to the start
+  // of the right piece. `pieces` is [{name, length}] in assembly order and
+  // `joins` is [{overhang, enzymes}], one per piece, joining it to the next.
+  function ligationJoins({ pieces, joins, sequence, circular = true, flank = 12 }) {
+    const seq = (sequence || "").toUpperCase();
+    const n = seq.length;
+    if (!n || !(pieces || []).length) return [];
+    let at = 0;
+    const rows = (pieces || []).map((piece, i) => {
+      const next = pieces[(i + 1) % pieces.length];
+      at += piece.length;
+      const start = at % n;
+      const join = (joins || [])[i] || {};
+      const overhang = (join.overhang || "").toUpperCase();
+      return {
+        after: piece.name,
+        before: next.name,
+        at: start,
+        overhang: overhang,
+        blunt: !overhang.length,
+        enzymes: (join.enzymes || []).filter(Boolean),
+        before5: read(seq, start - flank < 0 ? start - flank + n : start - flank, flank, circular),
+        after3: read(seq, (start + overhang.length) % n, flank, circular),
+      };
+    });
+    return circular ? rows : rows.slice(0, -1);
+  }
+
+  // Every product a pair can make on one template: each forward site paired
+  // with a reverse site facing it. More than one is the usual reason a PCR
+  // comes back with extra bands.
+  //
+  // Sites are {start, end, mismatches} in template coordinates, as
+  // findBindingSites returns them; a product runs from a forward site's
+  // first base to a reverse site's last base.
+  function pcrProducts({ forwardSites, reverseSites, templateLength, circular = false, maxSize = 20000 }) {
+    const n = templateLength;
+    const out = [];
+    (forwardSites || []).forEach((f) => {
+      (reverseSites || []).forEach((r) => {
+        let size;
+        if (circular) size = (((r.end - f.start) % n) + n) % n + 1;
+        else if (r.end < f.start) return;
+        else size = r.end - f.start + 1;
+        if (size <= 0 || size > maxSize) return;
+        out.push({
+          start: f.start,
+          end: r.end,
+          size: size,
+          mismatches: (f.mismatches || 0) + (r.mismatches || 0),
+        });
+      });
+    });
+    return out.sort((a, b) => a.size - b.size);
+  }
+
   // One line per problem, worst first. Empty means the assembly looks sound.
   function problems(joins, { minOverlap = 15, minTm = 48 } = {}) {
     const out = [];
@@ -157,5 +214,5 @@
     };
   }
 
-  return { layout, junctions, problems, summary, contextOf, occurrences, read, gc, revcomp };
+  return { layout, junctions, ligationJoins, pcrProducts, problems, summary, contextOf, occurrences, read, gc, revcomp };
 });

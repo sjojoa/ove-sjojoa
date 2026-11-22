@@ -92,6 +92,26 @@ describe("dnaTools: restriction cloning", () => {
     assert.ok(prod.features.length > 5);
   });
 
+  it("reports where the pieces meet, so the junctions can be previewed", () => {
+    const P = require("../src/cloning/productPreview.js");
+    const vfrags = d.digest(vector, ["XhoI", "XbaI"]);
+    const backbone = vfrags.reduce((a, b) => (a.size > b.size ? a : b));
+    const insert = makeInsert("XbaI", "XhoI");
+    const ifrag = d.digest(insert, ["XbaI", "XhoI"]).reduce((a, b) => (a.size > b.size ? a : b));
+    const [product] = d.restrictionClone({ vector, vectorFragment: backbone, insert, insertFragment: ifrag, name: "p" }).products;
+    const seq = product.sequenceData.sequence.toUpperCase();
+    assert.strictEqual(product.pieces.reduce((n, pc) => n + pc.length, 0), seq.length);
+    const joins = P.ligationJoins({ pieces: product.pieces, joins: product.joins, sequence: seq, circular: true });
+    assert.strictEqual(joins.length, 2);
+    joins.forEach((j) => {
+      // the overhang really is the first bases of the right piece
+      assert.strictEqual(seq.slice(j.at, j.at + j.overhang.length) || seq.slice(0, j.overhang.length), j.overhang);
+      assert.strictEqual(j.enzymes.length, 2);
+    });
+    // both sites survive the ligation, so the insert can be cut back out
+    assert.strictEqual(d.cutPositions(product.sequenceData, ["XhoI", "XbaI"]).length, 2);
+  });
+
   it("wrongly oriented sites give the reverse product", () => {
     const vfrags = d.digest(vector, ["XhoI", "XbaI"]);
     const backbone = vfrags.reduce((a, b) => (a.size > b.size ? a : b));

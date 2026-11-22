@@ -115,3 +115,92 @@ describe("previewing an assembled product", () => {
     assert.deepStrictEqual(s.order, ["vec", "ins"]);
   });
 });
+
+describe("ligation junctions", () => {
+  // vec | ins, joined by a 4 nt sticky end at each join. The overhang bases
+  // live at the START of the right piece, not the end of the left one.
+  const lPieces = [{ name: "vec", length: 70 }, { name: "ins", length: 60 }];
+  const lJoins = [
+    { overhang: ins.slice(0, 4), enzymes: ["EcoRI", "MfeI"] },
+    { overhang: vec.slice(0, 4), enzymes: ["BamHI", "BglII"] },
+  ];
+  const joins = P.ligationJoins({ pieces: lPieces, joins: lJoins, sequence: product, circular: true, flank: 6 });
+
+  it("puts the overhang at the first base of the right piece", () => {
+    assert.strictEqual(joins[0].at, 70);
+    assert.strictEqual(product.slice(70, 74), joins[0].overhang);
+    assert.strictEqual(joins[0].before5, vec.slice(-6));
+    assert.strictEqual(joins[0].after3, product.slice(74, 80));
+  });
+
+  it("closes the circle back to the first piece", () => {
+    assert.strictEqual(joins[1].at, 0);
+    assert.strictEqual(joins[1].after, "ins");
+    assert.strictEqual(joins[1].before, "vec");
+    assert.strictEqual(joins[1].before5, ins.slice(-6)); // reads round the origin
+  });
+
+  it("names both enzymes that made the junction", () => {
+    assert.deepStrictEqual(joins[0].enzymes, ["EcoRI", "MfeI"]);
+  });
+
+  it("marks a blunt join as blunt", () => {
+    const [j] = P.ligationJoins({
+      pieces: lPieces,
+      joins: [{ overhang: "", enzymes: ["EcoRV"] }, { overhang: "" }],
+      sequence: product,
+      circular: true,
+      flank: 4,
+    });
+    assert.strictEqual(j.blunt, true);
+    assert.strictEqual(j.overhang, "");
+    assert.strictEqual(j.after3, product.slice(70, 74));
+  });
+
+  it("does not join the last piece back on a linear product", () => {
+    const rows = P.ligationJoins({ pieces: lPieces, joins: lJoins, sequence: product, circular: false });
+    assert.strictEqual(rows.length, 1);
+  });
+});
+
+describe("PCR products", () => {
+  const F = [{ start: 100, end: 119, mismatches: 0 }];
+  const R = [{ start: 580, end: 599, mismatches: 0 }];
+
+  it("gives the one product a specific pair makes", () => {
+    const out = P.pcrProducts({ forwardSites: F, reverseSites: R, templateLength: 3000 });
+    assert.strictEqual(out.length, 1);
+    assert.deepStrictEqual(out[0], { start: 100, end: 599, size: 500, mismatches: 0 });
+  });
+
+  it("finds the extra band a second binding site makes, smallest first", () => {
+    const out = P.pcrProducts({
+      forwardSites: F,
+      reverseSites: [...R, { start: 280, end: 299, mismatches: 2 }],
+      templateLength: 3000,
+    });
+    assert.deepStrictEqual(out.map((p) => p.size), [200, 500]);
+    assert.strictEqual(out[0].mismatches, 2);
+  });
+
+  it("ignores a reverse site behind the forward primer on a linear template", () => {
+    const out = P.pcrProducts({ forwardSites: F, reverseSites: [{ start: 10, end: 29 }], templateLength: 3000 });
+    assert.deepStrictEqual(out, []);
+  });
+
+  it("amplifies round the origin of a circular template", () => {
+    const out = P.pcrProducts({
+      forwardSites: [{ start: 2900, end: 2919 }],
+      reverseSites: [{ start: 80, end: 99 }],
+      templateLength: 3000,
+      circular: true,
+    });
+    assert.strictEqual(out.length, 1);
+    assert.strictEqual(out[0].size, 200); // 2900..2999 then 0..99
+  });
+
+  it("drops a product too big to amplify", () => {
+    const out = P.pcrProducts({ forwardSites: F, reverseSites: R, templateLength: 3000, maxSize: 200 });
+    assert.deepStrictEqual(out, []);
+  });
+});
