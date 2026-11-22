@@ -1662,8 +1662,18 @@
     };
 
     const MAX_ROWS = 300;
+    // how many enzymes each filter would show, on the dropdown itself: the
+    // question "are there any two-cutters" is answered without clicking
+    const updateFilterCounts = (source) => {
+      [...cutsFilter.select.options].forEach((opt) => {
+        const f = ET.FILTERS.find((x) => x.value === opt.value);
+        if (!f) return;
+        opt.textContent = `${f.label} (${ET.filter(source, { query: query.value, cuts: f.value, selected: {} }).length})`;
+      });
+    };
     const draw = () => {
       const source = shareRow.input.checked ? grouped : rows;
+      updateFilterCounts(source);
       const shown = ET.filter(source, { query: query.value, cuts: cutsFilter.select.value, selected });
       const capped = shown.slice(0, MAX_ROWS);
       tableBox.innerHTML = "";
