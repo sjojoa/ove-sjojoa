@@ -393,3 +393,12 @@ details.ove-cl-details summary {
 .ove-cl-codon-freq { font-variant-numeric: tabular-nums; text-align: right; }
 .ove-cl-codon-best { background: #d4f1d4; font-weight: 600; }
 .ove-cl-codon-best .ove-cl-codon-aa { color: #1d7324; }
+/* Cut-site labels in the maps. OVE already colours them by how often the
+   enzyme cuts (salmon = once, blue = twice, grey = more); these add the
+   things colour does not say: how hard the cut is to miss, whether it leaves
+   a blunt end, and whether it is a Type IIS enzyme that cuts outside its
+   site. */
+.veCutUnique { font-weight: 700; }
+.veCutMulti { opacity: 0.5; }
+.veCutBlunt { text-decoration: underline dotted; text-underline-offset: 2px; }
+.veCutType2s::after { content: "\21E5"; margin-left: 2px; opacity: 0.8; }

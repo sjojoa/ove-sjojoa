@@ -323,6 +323,90 @@ const patches = [
     from: "Note: This tool requires an alignment server to be hooked up for it to work properly. It will NOT work in the OVE demo page.",
     to: "Alignments run locally on this computer (no server needed). Tip: add .ab1 files, tick \\\"Align Sequencing Reads to Reference Sequence\\\" and optionally \\\"Auto-Trim\\\".",
   },
+  {
+    name: "cut-site labels say how often the enzyme cuts and what end it leaves",
+    from: `      if (numberOfCuts === 1) {
+        cutsite.labelColor = mergedCutsiteColors.single;
+        cutsite.labelClassname = "singleCutter";
+      } else if (numberOfCuts === 2) {
+        cutsite.labelColor = mergedCutsiteColors["double"];
+        cutsite.labelClassname = "doubleCutter";
+      } else {
+        cutsite.labelColor = mergedCutsiteColors.multi;
+        cutsite.labelClassname = "multiCutter";
+      }`,
+    to: `      if (numberOfCuts === 1) {
+        cutsite.labelColor = mergedCutsiteColors.single;
+        cutsite.labelClassname = "singleCutter";
+      } else if (numberOfCuts === 2) {
+        cutsite.labelColor = mergedCutsiteColors["double"];
+        cutsite.labelClassname = "doubleCutter";
+      } else {
+        cutsite.labelColor = mergedCutsiteColors.multi;
+        cutsite.labelClassname = "multiCutter";
+      }
+      // the line above never reaches the DOM: the label renderer reads
+      // labelClassName, not labelClassname. Set it, and say what kind of cut
+      // it is, so the map answers "what can I cut with?" on its own.
+      cutsite.labelClassName = [
+        numberOfCuts === 1 ? "veCutUnique" : numberOfCuts === 2 ? "veCutTwice" : "veCutMulti",
+        cutsite.topSnipPosition === cutsite.bottomSnipPosition ? "veCutBlunt" : "veCutSticky",
+        cutsite.restrictionEnzyme && cutsite.restrictionEnzyme.isType2S ? "veCutType2s" : "",
+      ].join(" ");`,
+  },
+  {
+    name: "the cut-site panel has a Type column",
+    from: `      fields: [{
+        path: "name",
+        type: "string"
+      }, {
+        path: "numberOfCuts",
+        type: "number"
+      }, {
+        path: "groups",
+        type: "string"
+      }]`,
+    to: `      fields: [{
+        path: "name",
+        type: "string"
+      }, {
+        path: "numberOfCuts",
+        type: "number"
+      }, {
+        path: "cutKind",
+        type: "string",
+        displayName: "Type"
+      }, {
+        path: "groups",
+        type: "string"
+      }]`,
+  },
+  {
+    name: "the cut-site panel says unique / overhang / Type IIS",
+    from: `      return {
+        cutsiteGroup: cutsiteGroup,
+        id: name,
+        name: name,
+        numberOfCuts: cutsiteGroup.length,
+        enzyme: cutsiteGroup[0].restrictionEnzyme,
+        groups: groups`,
+    to: `      var cutsiteEnzyme = cutsiteGroup[0].restrictionEnzyme || {};
+      // what the map's bold / faded / dotted / arrow marks mean, in words
+      var overhang = Math.abs(cutsiteEnzyme.topSnipOffset - cutsiteEnzyme.bottomSnipOffset);
+      var cutKind = [
+        cutsiteGroup.length === 1 ? "unique" : cutsiteGroup.length + "\\u00d7",
+        overhang ? overhang + " nt " + (cutsiteEnzyme.topSnipOffset < cutsiteEnzyme.bottomSnipOffset ? "5\\u2032" : "3\\u2032") + " overhang" : "blunt",
+        cutsiteEnzyme.isType2S ? "Type IIS" : null
+      ].filter(Boolean).join(" \\u00b7 ");
+      return {
+        cutsiteGroup: cutsiteGroup,
+        id: name,
+        name: name,
+        numberOfCuts: cutsiteGroup.length,
+        cutKind: cutKind,
+        enzyme: cutsiteGroup[0].restrictionEnzyme,
+        groups: groups`,
+  },
 ];
 
 if (!fs.existsSync(bundlePath)) {
