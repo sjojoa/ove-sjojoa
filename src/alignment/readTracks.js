@@ -61,8 +61,10 @@
 
   // --- browser side -------------------------------------------------------
 
-  let current = []; // the results of the alignment now on screen
-  let selected = null; // track index, or null
+  let run = null; // { results, template, reads, merge } from the last alignment
+  let order = []; // which of run.results are on screen, in track order
+  let hidden = []; // the ones taken out, in the order they were taken out
+  let selected = null; // track index of the selected read, or null
 
   function editorFor(template) {
     const editor = typeof window !== "undefined" && window.editor;
@@ -84,16 +86,59 @@
           ...Object.values(sd.lineageAnnotations || {}).filter(
             (a) => !(a.id || "").startsWith(PREFIX)
           ),
-          ...annotationsFor(current, selected),
+          ...annotationsFor(shown(), selected),
         ],
       },
     });
   }
 
-  function show(results, template) {
-    current = results || [];
+  // The reads on screen, in the order their tracks are drawn, so a track index
+  // means the same thing to the map, the name chips and the alignment itself.
+  const shown = () => order.map((i) => run.results[i]);
+
+  function show(payload) {
+    run = payload || null;
+    order = ((payload && payload.results) || []).map((_, i) => i);
+    hidden = [];
     selected = null;
-    paint(editorFor(template));
+    paint(editorFor(payload && payload.template));
+  }
+
+  // --- taking a read out of the alignment ----------------------------------
+  //
+  // Hiding a read is not a matter of not drawing it: a base the read has and
+  // the plasmid does not holds a column open across every row, and once that
+  // read is gone the column should close up again if nothing else needs it.
+  // So the alignment is merged again from the reads that are left and handed
+  // back to OVE, which recomputes the mismatches from it.
+  function alignmentId() {
+    const editor = window.editor && window.editor.getState ? window.editor : null;
+    if (!editor) return null;
+    const panel = (editor.getState().panelsShown || [])
+      .flat()
+      .find((p) => p.type === "alignment" && p.active);
+    return panel ? panel.id : null;
+  }
+
+  function rebuild() {
+    const editor = window.editor && window.editor.addAlignment ? window.editor : null;
+    const id = alignmentId();
+    if (!run || !run.merge || !editor || !id) return false;
+    const { refRow, readRows } = run.merge(shown());
+    const track = (seq, name, sequence) => ({
+      sequenceData: seq,
+      alignmentData: { name, sequence },
+      chromatogramData: seq.chromatogramData,
+    });
+    editor.addAlignment({
+      id,
+      alignmentTracks: [
+        track(run.template, `0_${run.template.name}`, refRow),
+        ...order.map((i, k) => track(run.reads[i], `${k + 1}_${run.reads[i].name}`, readRows[k])),
+      ],
+    });
+    paint(editorFor(run.template));
+    return true;
   }
 
   function select(trackIndex) {
@@ -137,7 +182,7 @@
   function controls(React, trackIndex, name, isTemplate) {
     const items = [];
     if (!isTemplate) {
-      const res = current[trackIndex - 1];
+      const res = shown()[trackIndex - 1];
       const reversed = res ? res.reversed : /\(rev-comp\)/.test(name || "");
       items.push(
         React.createElement(
@@ -164,8 +209,19 @@
         chip(React, {
           key: "hide",
           label: "\u2013",
-          title: "Hide or show this read",
-          onClick: (e) => toggle(e, "ove-track-hidden"),
+          title: "Take this read out of the alignment",
+          onClick: (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const was = order.slice();
+            hidden.push(order[trackIndex - 1]);
+            order = order.filter((_, k) => k !== trackIndex - 1);
+            selected = null;
+            if (!rebuild()) {
+              order = was;
+              hidden.pop();
+            }
+          },
         })
       );
     }
@@ -176,6 +232,32 @@
   // and put it back. OVE keeps its panels as groups, one group per split.
   let split = null;
   function topBar(React) {
+    const items = [];
+    if (hidden.length) {
+      const names = hidden.map((i) => (run && run.reads[i] && run.reads[i].name) || `read ${i + 1}`);
+      items.push(
+        chip(React, {
+          key: "unhide",
+          label: `${hidden.length} hidden \u21ba`,
+          title: `Put back: ${names.join(", ")}`,
+          onClick: (e) => {
+            e.preventDefault();
+            const was = { order, hidden };
+            order = run.results.map((_, i) => i);
+            hidden = [];
+            if (!rebuild()) {
+              order = was.order;
+              hidden = was.hidden;
+            }
+          },
+        })
+      );
+    }
+    items.push(fullWindowButton(React));
+    return items;
+  }
+
+  function fullWindowButton(React) {
     return chip(React, {
       key: "fullwindow",
       label: "\u2922",
@@ -215,5 +297,5 @@
     });
   }
 
-  return { PREFIX, RED, BLUE, idFor, annotationsFor, strip, show, select, controls, topBar };
+  return { PREFIX, RED, BLUE, idFor, annotationsFor, strip, show, select, controls, topBar, rebuild };
 });

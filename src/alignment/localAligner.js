@@ -409,10 +409,12 @@
       // The same reads drawn as arrows on the map, so the two views show the
       // same thing (they are a view of the alignment, not part of the file).
       if (window.oveReadTracks) {
-        window.oveReadTracks.show(
-          results.map((res, idx) => ({ ...res, name: others[idx].name })),
-          template
-        );
+        window.oveReadTracks.show({
+          results: results.map((res, idx) => ({ ...res, name: others[idx].name })),
+          template,
+          reads: others,
+          merge: (kept) => mergeToReference(ref, kept),
+        });
       }
 
       if (isPairwiseAlignment) {
