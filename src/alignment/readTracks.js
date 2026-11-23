@@ -108,23 +108,106 @@
     if (el) el.classList.add("ove-track-selected");
   }
 
-  // The arrow drawn next to a track's name in the alignment panel. Called from
-  // the patched AlignmentView; React is passed in because this file is a plain
-  // script with no bundler.
-  function arrow(React, trackIndex, name, isTemplate) {
-    if (isTemplate) return null;
-    const res = current[trackIndex - 1];
-    const reversed = res ? res.reversed : /\(rev-comp\)/.test(name || "");
+  // --- the controls on a track's name chip ---------------------------------
+  //
+  // Collapsing a trace and hiding a read are both answers to "there is too
+  // much on screen", and neither needs OVE to re-render: they are classes on
+  // the track's own row, and the CSS in style.css does the rest. A hidden read
+  // keeps its name chip, so the same button brings it back.
+  const TRACK = ".alignmentViewTrackContainer";
+  const rowOf = (e) => e.currentTarget.closest(TRACK);
+
+  function toggle(e, className) {
+    e.preventDefault();
+    e.stopPropagation();
+    const row = rowOf(e);
+    if (row) row.classList.toggle(className);
+  }
+
+  function chip(React, { onClick, title, label, key }) {
     return React.createElement(
       "span",
-      { className: "ove-track-arrow", title: reversed ? "read on the bottom strand" : "read on the top strand" },
-      reversed ? "◀" : "▶"
+      { className: "ove-track-btn", onClick, title, key, role: "button" },
+      label
     );
+  }
+
+  // Called from the patched AlignmentView. React is passed in because this file
+  // is a plain script with no bundler.
+  function controls(React, trackIndex, name, isTemplate) {
+    const items = [];
+    if (!isTemplate) {
+      const res = current[trackIndex - 1];
+      const reversed = res ? res.reversed : /\(rev-comp\)/.test(name || "");
+      items.push(
+        React.createElement(
+          "span",
+          {
+            className: "ove-track-arrow",
+            key: "arrow",
+            title: reversed ? "read on the bottom strand" : "read on the top strand",
+          },
+          reversed ? "\u25c0" : "\u25b6"
+        )
+      );
+    }
+    items.push(
+      chip(React, {
+        key: "trace",
+        label: "\u223f",
+        title: "Show or hide this chromatogram",
+        onClick: (e) => toggle(e, "ove-track-collapsed"),
+      })
+    );
+    if (!isTemplate) {
+      items.push(
+        chip(React, {
+          key: "hide",
+          label: "\u2013",
+          title: "Hide or show this read",
+          onClick: (e) => toggle(e, "ove-track-hidden"),
+        })
+      );
+    }
+    return items;
+  }
+
+  // Give the alignment the whole window instead of sharing it with the map,
+  // and put it back. OVE keeps its panels as groups, one group per split.
+  let split = null;
+  function topBar(React) {
+    return chip(React, {
+      key: "fullwindow",
+      label: "\u2922",
+      title: "Give the alignment the whole window",
+      onClick: (e) => {
+        e.preventDefault();
+        const editor = window.editor && window.editor.getState ? window.editor : null;
+        if (!editor) return;
+        const groups = editor.getState().panelsShown || [];
+        if (groups.length > 1) {
+          split = groups;
+          // every panel ends up in one group, so only one of them can be the
+          // open tab: keep the one the alignment's own half had open
+          const keep = (groups[0] || []).find((pane) => pane.active);
+          editor.updateEditor({
+            panelsShown: [
+              groups.flat().map((pane) => ({ ...pane, active: !!keep && pane.id === keep.id })),
+            ],
+          });
+        } else if (split) {
+          editor.updateEditor({ panelsShown: split });
+          split = null;
+        }
+      },
+    });
   }
 
   if (typeof document !== "undefined") {
     document.addEventListener("click", (e) => {
-      const el = e.target.closest && e.target.closest(".alignmentTrackName");
+      if (!e.target.closest) return;
+      if (e.target.closest(".ove-track-btn")) return; // a row control, not a selection
+      const el = e.target.closest(".alignmentTrackName");
       if (!el) return;
       const row = el.closest("[data-alignment-track-index]");
       const idx = row && Number(row.getAttribute("data-alignment-track-index"));
@@ -132,5 +215,5 @@
     });
   }
 
-  return { PREFIX, RED, BLUE, idFor, annotationsFor, strip, show, select, arrow };
+  return { PREFIX, RED, BLUE, idFor, annotationsFor, strip, show, select, controls, topBar };
 });

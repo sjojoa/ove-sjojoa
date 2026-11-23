@@ -32,20 +32,34 @@ const patches = [
     to: "    // (alignment kept in redux so it still shows after switching tabs)\n    this.onShortcutCopy",
   },
   {
-    // A whole-plasmid read asks for a canvas thousands of pixels wider than
-    // any browser will hand out (6,757 bases x 12px = 81,096, and the cap is
-    // 65,535), and an oversized canvas draws nothing at all -- the traces came
-    // out as a broken-image box. Draw into a bitmap within the cap and let CSS
-    // stretch it back to full width: the peaks stay over the right bases, just
-    // at coarser horizontal resolution the longer the read is.
-    name: "chromatograms draw for reads longer than a canvas is wide",
+    // Two things were wrong with the trace canvas. It was sized in CSS pixels,
+    // so on a Retina screen the display blew every trace up 2x -- that is the
+    // softness. And a whole-plasmid read asks for a canvas wider than the
+    // 65,535px browsers allow, and an oversized canvas draws nothing at all.
+    // Paint at the device's own resolution, backing off only as far as the cap
+    // forces, and give the element an explicit CSS size so the height can be
+    // read back on later paints instead of the bitmap we just rescaled.
+    name: "chromatograms are drawn at the screen's real resolution",
+    from: "  var maxHeight = peakCanvas.height;",
+    to: "  var maxHeight = parseFloat(peakCanvas.style.height) || peakCanvas.height;",
+  },
+  {
+    name: "chromatograms fit the canvas size browsers allow",
     from: "  var maxWidth = seqLengthWithGaps * charWidth;\n  peakCanvas.width = maxWidth;",
     to:
       "  var maxWidth = seqLengthWithGaps * charWidth;\n" +
-      "  var maxCanvasWidth = 32767;\n" +
-      "  peakCanvas.width = Math.min(maxWidth, maxCanvasWidth);\n" +
+      "  var pxRatio = Math.min(window.devicePixelRatio || 1, 65535 / Math.max(maxWidth, 1));\n" +
+      "  peakCanvas.width = Math.round(maxWidth * pxRatio);\n" +
+      "  peakCanvas.height = Math.round(maxHeight * pxRatio);\n" +
       "  peakCanvas.style.width = maxWidth + \"px\";\n" +
-      "  if (maxWidth > 0) ctx.setTransform(peakCanvas.width / maxWidth, 0, 0, 1, 0, 0);",
+      "  peakCanvas.style.height = maxHeight + \"px\";\n" +
+      "  ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);",
+  },
+  {
+    // a full-height trace pushes the next read off the screen
+    name: "chromatograms are not as tall",
+    from: '    ref: canvasRef,\n    height: "100"',
+    to: '    ref: canvasRef,\n    height: "62"',
   },
   {
     name: "alignment track names are red, or blue for the selected read",
@@ -53,14 +67,14 @@ const patches = [
     to: 'className: "alignmentTrackNameDiv " + (i === 0 ? "ove-track-template" : "ove-track-read ove-track-read-" + i),',
   },
   {
-    name: "alignment track names carry a direction arrow",
+    name: "alignment track names carry a direction arrow and row controls",
     from: "minimal: true\n        }), name), ",
-    to: "minimal: true\n        }), window.oveReadTracks ? window.oveReadTracks.arrow(react_default.a, i, name, i === 0) : null, name), ",
+    to: "minimal: true\n        }), window.oveReadTracks ? window.oveReadTracks.controls(react_default.a, i, name, i === 0) : null, name), ",
   },
   {
     name: "previous/next mismatch buttons in the alignment top bar",
     from: 'className: "alignmentViewBackButton"\n    })), ',
-    to: 'className: "alignmentViewBackButton"\n    })), window.oveRenderMismatchNav ? window.oveRenderMismatchNav(react_default.a, _this4) : null, ',
+    to: 'className: "alignmentViewBackButton"\n    })), window.oveRenderMismatchNav ? window.oveRenderMismatchNav(react_default.a, _this4) : null, window.oveReadTracks ? window.oveReadTracks.topBar(react_default.a) : null, ',
   },
   {
     name: "alignment feature labels shown by default",

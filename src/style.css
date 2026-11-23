@@ -66,3 +66,25 @@
   font-size: 10px;
   vertical-align: middle;
 }
+
+/* Row controls on an alignment track's name chip (src/alignment/readTracks.js):
+   collapse a trace, or set a read aside without taking it out of the run. A
+   hidden read keeps its name chip so the same button brings it back. */
+.ove-track-btn {
+  padding: 0 4px;
+  cursor: pointer;
+  opacity: 0.75;
+  user-select: none;
+}
+.ove-track-btn:hover {
+  opacity: 1;
+}
+.alignmentViewTrackContainer.ove-track-collapsed .chromatogram {
+  display: none;
+}
+.alignmentViewTrackContainer.ove-track-hidden > *:not(.alignmentTrackName) {
+  display: none;
+}
+.alignmentViewTrackContainer.ove-track-hidden .alignmentTrackNameDiv {
+  opacity: 0.45;
+}
