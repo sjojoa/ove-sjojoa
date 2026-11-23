@@ -52,3 +52,17 @@
 .bp3-dark .ove-mismatch-detail {
   color: #a7b6c2;
 }
+
+/* Reads in an alignment: red, and blue for the one you have selected, to match
+   the arrows drawn over the map (src/alignment/readTracks.js). */
+.alignmentTrackNameDiv.ove-track-read {
+  background: #c23030 !important;
+}
+.alignmentTrackNameDiv.ove-track-read.ove-track-selected {
+  background: #3fa6da !important;
+}
+.ove-track-arrow {
+  padding: 0 4px;
+  font-size: 10px;
+  vertical-align: middle;
+}

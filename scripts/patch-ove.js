@@ -32,6 +32,16 @@ const patches = [
     to: "    // (alignment kept in redux so it still shows after switching tabs)\n    this.onShortcutCopy",
   },
   {
+    name: "alignment track names are red, or blue for the selected read",
+    from: 'className: "alignmentTrackNameDiv",',
+    to: 'className: "alignmentTrackNameDiv " + (isTemplate ? "ove-track-template" : "ove-track-read ove-track-read-" + i),',
+  },
+  {
+    name: "alignment track names carry a direction arrow",
+    from: "minimal: true\n        }), name), ",
+    to: "minimal: true\n        }), window.oveReadTracks ? window.oveReadTracks.arrow(react_default.a, i, name, isTemplate) : null, name), ",
+  },
+  {
     name: "previous/next mismatch buttons in the alignment top bar",
     from: 'className: "alignmentViewBackButton"\n    })), ',
     to: 'className: "alignmentViewBackButton"\n    })), window.oveRenderMismatchNav ? window.oveRenderMismatchNav(react_default.a, _this4) : null, ',

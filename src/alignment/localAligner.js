@@ -226,43 +226,65 @@
   function alignCircular(ref, read) {
     const n = ref.length;
     const best = alignBestStrand(ref + ref, read);
-    if (best.noSeed) return { ...best, refAligned: ref, readAligned: "-".repeat(n) };
+    const empty = { ...best, refAligned: ref, readAligned: "-".repeat(n) };
+    if (best.noSeed) return empty;
 
-    // where each read base sits on the doubled reference
-    const refAligned = best.refAligned;
-    const readAligned = best.readAligned;
-    const placed = [];
+    // Fold the doubled-reference alignment back onto the real coordinates:
+    // each read base lands on `refPos % n`. Bases the read has but the
+    // reference does not stay attached to the reference position they sit in
+    // front of, so an insertion still opens a gap in the plasmid row.
+    const cols = new Array(n).fill("-");
+    const ins = new Array(n).fill("");
     let refPos = 0;
-    for (let col = 0; col < refAligned.length; col++) {
-      const r = refAligned[col];
-      const q = readAligned[col];
-      if (r !== "-") {
-        if (q !== "-") placed.push({ at: refPos, base: q });
-        refPos += 1;
+    let first = null;
+    let last = null;
+    for (let col = 0; col < best.refAligned.length; col++) {
+      const r = best.refAligned[col];
+      const q = best.readAligned[col];
+      if (r === "-") {
+        if (q !== "-") ins[refPos % n] += q;
+        continue;
       }
-      // shortcut: a read base inserted against the reference has no column of
-      // its own once folded, so insertions are dropped from the circular
-      // view. Mismatches and deletions survive. Upgrade when OVE can show a
-      // row that wraps.
+      if (q !== "-") {
+        cols[refPos % n] = q;
+        if (first === null) first = refPos;
+        last = refPos;
+      }
+      refPos += 1;
     }
-    if (!placed.length) return { ...best, refAligned: ref, readAligned: "-".repeat(n) };
+    if (first === null) return empty;
 
-    const first = placed[0].at;
-    const last = placed[placed.length - 1].at;
+    let refAligned = "";
+    let readAligned = "";
+    for (let k = 0; k < n; k++) {
+      refAligned += "-".repeat(ins[k].length) + ref[k];
+      readAligned += ins[k] + cols[k];
+    }
     return {
       ...best,
-      refAligned: ref,
-      readAligned: foldRow(placed, n),
+      refAligned,
+      readAligned,
       wrapped: first < n && last >= n,
+      refStart: first % n,
+      refEnd: last % n,
     };
   }
 
-  function foldRow(placed, n) {
-    const row = new Array(n).fill("-");
-    placed.forEach(({ at, base }) => {
-      row[((at % n) + n) % n] = base;
-    });
-    return row.join("");
+  // Where a read sits on the reference, in reference coordinates (0-based,
+  // inclusive), ignoring the leading/trailing gaps of an overlap alignment.
+  function refSpan(refAligned, readAligned) {
+    let refPos = 0;
+    let first = null;
+    let last = null;
+    for (let c = 0; c < refAligned.length; c++) {
+      if (refAligned[c] === "-") continue;
+      if (readAligned[c] !== "-") {
+        if (first === null) first = refPos;
+        last = refPos;
+      }
+      refPos += 1;
+    }
+    return first === null ? null : { refStart: first, refEnd: last };
   }
 
   // Per-base trace windows for OVE's chromatogram renderer, built from the raw
@@ -375,12 +397,22 @@
       const results = [];
       for (const seqObj of others) {
         const res = template.circular ? alignCircular(ref, seqObj.sequence) : alignBestStrand(ref, seqObj.sequence);
+        if (res.refStart === undefined) Object.assign(res, refSpan(res.refAligned, res.readAligned));
         if (res.noSeed) {
           window.toastr &&
             window.toastr.warning(`${seqObj.name}: no match found on the reference`);
         }
         prepareSequenceForDisplay(seqObj, res.reversed);
         results.push(res);
+      }
+
+      // The same reads drawn as arrows on the map, so the two views show the
+      // same thing (they are a view of the alignment, not part of the file).
+      if (window.oveReadTracks) {
+        window.oveReadTracks.show(
+          results.map((res, idx) => ({ ...res, name: others[idx].name })),
+          template
+        );
       }
 
       if (isPairwiseAlignment) {
@@ -408,9 +440,9 @@
   const api = {
     handleAlignment,
     alignCircular,
-    foldRow,
     overlapAlign,
     alignBestStrand,
+    refSpan,
     mergeToReference,
     reverseComplement,
     reverseComplementChromatogram,

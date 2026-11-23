@@ -54,3 +54,31 @@ describe("aligning a read to a circular sequence", () => {
     assert.strictEqual(res.readAligned, plasmid);
   });
 });
+
+describe("an insertion in a read on a circular template", () => {
+  const plasmid =
+    "ATGCGTACGATCAGCTTAGCCATCAGGATCCTTAGCAAGTCCGATTACGGCATTACCGGTTAAGCTCAGGCATCAGCATTT" +
+    "GGCCATTAGCAGTCAGCATCGGATCCATTAGCATCAGCTAGCTAACGGTCAGCTTACGCATTACGCATCAGCATTAGGCAT" +
+    "CCGGATTACAGCATCAGGCATTACGCATCAGGCATTAGCAGTCAGCATCGGATTCATTAGCATCAGCTAGCTAACGGTAAC";
+  const A = require("../src/alignment/localAligner.js");
+
+  it("opens a gap in the plasmid row rather than being dropped", () => {
+    // 80 bases from the middle with three extra bases spliced in
+    const read = plasmid.slice(100, 140) + "GGG" + plasmid.slice(140, 180);
+    const res = A.alignCircular(plasmid, read);
+    assert.strictEqual(res.refAligned.length, plasmid.length + 3);
+    assert.strictEqual(res.readAligned.length, res.refAligned.length);
+    // the plasmid row has exactly the three inserted columns missing from it
+    assert.strictEqual(res.refAligned.replace(/-/g, ""), plasmid);
+    assert.ok(res.refAligned.includes("---"));
+    // and the read's own bases survive
+    assert.ok(res.readAligned.replace(/-/g, "").includes("GGG"));
+  });
+
+  it("reports where a read sits on the reference", () => {
+    const read = plasmid.slice(100, 180);
+    const res = A.alignCircular(plasmid, read);
+    assert.strictEqual(res.refStart, 100);
+    assert.strictEqual(res.refEnd, 179);
+  });
+});
