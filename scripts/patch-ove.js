@@ -407,12 +407,67 @@ const patches = [
         enzyme: cutsiteGroup[0].restrictionEnzyme,
         groups: groups`,
   },
+  {
+    name: "the editor's own ab1 reader accepts PLOC tag 1",
+    from: `  peakLocations: { tagName: "PLOC", tagNum: 2, typeToReturn: "getShort" },`,
+    to: `  peakLocations: { tagName: "PLOC", tagNum: 2, alsoTagNum: 1, typeToReturn: "getShort" },`,
+  },
+  {
+    name: "the editor's own ab1 reader falls back to the other tag number",
+    from: `      if (currTagName == inTag.tagName && tagNum === inTag.tagNum) {`,
+    to: `      const tagNumMatches =
+        tagNum === inTag.tagNum ||
+        (inTag.alsoTagNum !== undefined && tagNum === inTag.alsoTagNum && output === undefined);
+      if (currTagName == inTag.tagName && tagNumMatches) {`,
+  },
 ];
 
 if (!fs.existsSync(bundlePath)) {
   console.warn(`[patch-ove] ${bundlePath} not found, skipping`);
   process.exit(0);
 }
+
+// bio-parsers is patched too: its .ab1 reader looks for the peak locations
+// under PLOC tag 2 only, and plenty of sequencing vendors write PLOC tag 1.
+// Those files then crash the parser outright ("Cannot read properties of
+// undefined"), which is why real traces would not open.
+const ab1Path = path.join(__dirname, "..", "node_modules", "bio-parsers", "lib", "parsers", "ab1ToJson.js");
+const ab1Patches = [
+  {
+    name: "ab1 files that carry PLOC tag 1 instead of tag 2",
+    from: `      if (currTagName == inTag.tagName && tagNum === inTag.tagNum) {`,
+    to: `      var tagNumMatches = tagNum === inTag.tagNum || (inTag.alsoTagNum !== undefined && tagNum === inTag.alsoTagNum && output === undefined);
+
+      if (currTagName == inTag.tagName && tagNumMatches) {`,
+  },
+  {
+    name: "ab1 peak locations accept either tag number",
+    from: `  peakLocations: {
+    tagName: "PLOC",
+    tagNum: 2,`,
+    to: `  peakLocations: {
+    tagName: "PLOC",
+    tagNum: 2,
+    alsoTagNum: 1,`,
+  },
+];
+
+function applyPatches(file, list, label) {
+  if (!fs.existsSync(file)) {
+    console.warn(`[patch-ove] ${file} not found, skipping ${label}`);
+    return;
+  }
+  let text = fs.readFileSync(file, "utf8");
+  for (const { name, from, to } of list) {
+    if (text.includes(to)) console.log(`[patch-ove] already applied: ${name}`);
+    else if (text.includes(from)) {
+      text = text.split(from).join(to);
+      console.log(`[patch-ove] applied: ${name}`);
+    } else console.warn(`[patch-ove] target not found, skipped: ${name}`);
+  }
+  fs.writeFileSync(file, text);
+}
+applyPatches(ab1Path, ab1Patches, "bio-parsers");
 
 let source = fs.readFileSync(bundlePath, "utf8");
 for (const { name, from, to } of patches) {

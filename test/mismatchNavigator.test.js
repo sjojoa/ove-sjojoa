@@ -71,3 +71,49 @@ describe("mismatchNavigator: describeMismatch", () => {
     assert.deepStrictEqual(describeMismatch(mk(ref, read, [fwd]), { start: 0, end: 0 }).features, []);
   });
 });
+
+describe("where the arrows stop", () => {
+  const { findStops } = require("../src/alignment/mismatchNavigator");
+  const tracks = (...rows) =>
+    rows.map((sequence, i) => ({ alignmentData: { sequence }, sequenceData: { name: `t${i}` } }));
+
+  it("stops at the read's start, its mismatches, then its end", () => {
+    //              0123456789
+    const t = tracks("ACGTACGTAC", "--GTAAGT--");
+    const stops = findStops(t);
+    assert.deepStrictEqual(stops.map((s) => [s.kind, s.start]), [
+      ["start", 2],
+      ["mismatch", 5],
+      ["end", 7],
+    ]);
+  });
+
+  it("gives a read with no mismatches just its two ends", () => {
+    const stops = findStops(tracks("ACGTACGTAC", "--GTACGT--"));
+    assert.deepStrictEqual(stops.map((s) => s.kind), ["start", "end"]);
+  });
+
+  it("does not stop twice when a read begins on a mismatch", () => {
+    // the read's first base already disagrees
+    const stops = findStops(tracks("ACGTACGT", "--TTACGT"));
+    assert.deepStrictEqual(stops.map((s) => [s.kind, s.start]), [
+      ["mismatch", 2],
+      ["end", 7],
+    ]);
+  });
+
+  it("interleaves two reads in column order", () => {
+    const stops = findStops(tracks("ACGTACGTACGTACGT", "-CGTAC----------", "---------CGTACG-"));
+    assert.deepStrictEqual(stops.map((s) => [s.kind, s.start]), [
+      ["start", 1],
+      ["end", 5],
+      ["start", 9],
+      ["end", 14],
+    ]);
+  });
+
+  it("keeps a read that covers everything to one stop at each end", () => {
+    const stops = findStops(tracks("ACGT", "ACGT"));
+    assert.deepStrictEqual(stops.map((s) => [s.kind, s.start]), [["start", 0], ["end", 3]]);
+  });
+});

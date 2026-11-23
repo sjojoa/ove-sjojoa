@@ -217,6 +217,54 @@
     return { ...fwd, reversed: false, alignedInput: read };
   }
 
+  // A plasmid's origin is an arbitrary place to start writing it down, so a
+  // read can run off the end and carry on at base 1 -- a whole-plasmid read
+  // always does. Aligning against the sequence written twice lets the read
+  // land across that seam; the result is then folded back onto the real
+  // coordinates, so the read shows up at both ends of the view, which is what
+  // a circular alignment looks like when it is drawn in a line.
+  function alignCircular(ref, read) {
+    const n = ref.length;
+    const best = alignBestStrand(ref + ref, read);
+    if (best.noSeed) return { ...best, refAligned: ref, readAligned: "-".repeat(n) };
+
+    // where each read base sits on the doubled reference
+    const refAligned = best.refAligned;
+    const readAligned = best.readAligned;
+    const placed = [];
+    let refPos = 0;
+    for (let col = 0; col < refAligned.length; col++) {
+      const r = refAligned[col];
+      const q = readAligned[col];
+      if (r !== "-") {
+        if (q !== "-") placed.push({ at: refPos, base: q });
+        refPos += 1;
+      }
+      // shortcut: a read base inserted against the reference has no column of
+      // its own once folded, so insertions are dropped from the circular
+      // view. Mismatches and deletions survive. Upgrade when OVE can show a
+      // row that wraps.
+    }
+    if (!placed.length) return { ...best, refAligned: ref, readAligned: "-".repeat(n) };
+
+    const first = placed[0].at;
+    const last = placed[placed.length - 1].at;
+    return {
+      ...best,
+      refAligned: ref,
+      readAligned: foldRow(placed, n),
+      wrapped: first < n && last >= n,
+    };
+  }
+
+  function foldRow(placed, n) {
+    const row = new Array(n).fill("-");
+    placed.forEach(({ at, base }) => {
+      row[((at % n) + n) % n] = base;
+    });
+    return row.join("");
+  }
+
   // Per-base trace windows for OVE's chromatogram renderer, built from the raw
   // traces + peak positions. Always rebuilt so that trimmed or reversed reads
   // stay consistent (OVE's auto-trim does not trim baseTraces).
@@ -326,7 +374,7 @@
       const ref = template.sequence;
       const results = [];
       for (const seqObj of others) {
-        const res = alignBestStrand(ref, seqObj.sequence);
+        const res = template.circular ? alignCircular(ref, seqObj.sequence) : alignBestStrand(ref, seqObj.sequence);
         if (res.noSeed) {
           window.toastr &&
             window.toastr.warning(`${seqObj.name}: no match found on the reference`);
@@ -359,6 +407,8 @@
 
   const api = {
     handleAlignment,
+    alignCircular,
+    foldRow,
     overlapAlign,
     alignBestStrand,
     mergeToReference,

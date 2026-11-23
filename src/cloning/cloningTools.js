@@ -1785,7 +1785,10 @@
       const features = (construct.features || []).filter((f) => f && f.name);
 
       const reports = reads.map((r) => {
-        const aligned = AL.alignBestStrand(refSeq, r.seqData.sequence);
+        // a read of a plasmid can run off the end and carry on at base 1
+        const aligned = construct.circular
+          ? AL.alignCircular(refSeq, r.seqData.sequence)
+          : AL.alignBestStrand(refSeq, r.seqData.sequence);
         return CC.readReport({ ...aligned, name: r.name, reversed: aligned.reversed });
       });
 

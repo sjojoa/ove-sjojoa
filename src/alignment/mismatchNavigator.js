@@ -30,9 +30,31 @@
     return ranges;
   }
 
-  const cache = new WeakMap(); // tracks array -> mismatch ranges
+  // Where a read begins and ends matters as much as where it disagrees: on a
+  // circular template a read starts and finishes in the middle of nowhere, and
+  // "is this stretch even covered" is the other half of reading an alignment.
+  // So the arrows stop at those edges too, in column order, and keep cycling.
+  function findStops(tracks) {
+    const stops = findMismatchRanges(tracks).map((r) => ({ ...r, kind: "mismatch" }));
+    for (let t = 1; t < (tracks || []).length; t++) {
+      const seq = tracks[t].alignmentData.sequence;
+      const first = seq.search(/[^-]/);
+      if (first === -1) continue;
+      const last = seq.length - 1 - seq.split("").reverse().join("").search(/[^-]/);
+      const name = (tracks[t].sequenceData && tracks[t].sequenceData.name) || `read ${t}`;
+      stops.push({ start: first, end: first, kind: "start", name });
+      if (last !== first) stops.push({ start: last, end: last, kind: "end", name });
+    }
+    const mismatches = stops.filter((s) => s.kind === "mismatch");
+    return stops
+      // an edge sitting on a mismatch is the same stop twice
+      .filter((s) => s.kind === "mismatch" || !mismatches.some((m) => s.start >= m.start && s.start <= m.end))
+      .sort((a, b) => a.start - b.start || (a.kind === "start" ? -1 : b.kind === "start" ? 1 : 0));
+  }
+
+  const cache = new WeakMap(); // tracks array -> navigation stops
   function getRanges(tracks) {
-    if (!cache.has(tracks)) cache.set(tracks, findMismatchRanges(tracks));
+    if (!cache.has(tracks)) cache.set(tracks, findStops(tracks));
     return cache.get(tracks);
   }
 
@@ -351,22 +373,25 @@
     return h(
       "div",
       { className: "ove-align-nav ove-mismatch-nav" },
-      button("chevron-left", "Previous mismatch", -1),
+      button("chevron-left", "Previous mismatch, or where a read starts or ends", -1),
       h(
         "span",
         { style: { fontSize: 12, margin: "0 4px" }, className: "ove-mismatch-count" },
         ranges.length
-          ? `Mismatch ${idx > -1 ? idx + 1 : "–"} / ${ranges.length}`
+          ? `${describeStop(ranges, idx)} ${idx > -1 ? idx + 1 : "–"} / ${ranges.length}`
           : "No mismatches"
       ),
-      button("chevron-right", "Next mismatch", 1),
+      button("chevron-right", "Next mismatch, or where a read starts or ends", 1),
       h("span", { style: { width: 10 } }),
       ...slider,
       idx > -1 ? infoLine(h, alignmentTracks, ranges[idx]) : null
     );
   }
 
-  const api = { findMismatchRanges, renderMismatchNav, refPositions, describeMismatch };
+  const STOP_LABELS = { mismatch: "Mismatch", start: "Read start", end: "Read end" };
+  const describeStop = (ranges, idx) => (idx > -1 && ranges[idx] ? STOP_LABELS[ranges[idx].kind] || "Stop" : "Stop");
+
+  const api = { findMismatchRanges, findStops, renderMismatchNav, refPositions, describeMismatch };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   if (typeof window !== "undefined") window.oveRenderMismatchNav = renderMismatchNav;
 })();
