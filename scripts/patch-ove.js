@@ -32,14 +32,30 @@ const patches = [
     to: "    // (alignment kept in redux so it still shows after switching tabs)\n    this.onShortcutCopy",
   },
   {
+    // A whole-plasmid read asks for a canvas thousands of pixels wider than
+    // any browser will hand out (6,757 bases x 12px = 81,096, and the cap is
+    // 65,535), and an oversized canvas draws nothing at all -- the traces came
+    // out as a broken-image box. Draw into a bitmap within the cap and let CSS
+    // stretch it back to full width: the peaks stay over the right bases, just
+    // at coarser horizontal resolution the longer the read is.
+    name: "chromatograms draw for reads longer than a canvas is wide",
+    from: "  var maxWidth = seqLengthWithGaps * charWidth;\n  peakCanvas.width = maxWidth;",
+    to:
+      "  var maxWidth = seqLengthWithGaps * charWidth;\n" +
+      "  var maxCanvasWidth = 32767;\n" +
+      "  peakCanvas.width = Math.min(maxWidth, maxCanvasWidth);\n" +
+      "  peakCanvas.style.width = maxWidth + \"px\";\n" +
+      "  if (maxWidth > 0) ctx.setTransform(peakCanvas.width / maxWidth, 0, 0, 1, 0, 0);",
+  },
+  {
     name: "alignment track names are red, or blue for the selected read",
     from: 'className: "alignmentTrackNameDiv",',
-    to: 'className: "alignmentTrackNameDiv " + (isTemplate ? "ove-track-template" : "ove-track-read ove-track-read-" + i),',
+    to: 'className: "alignmentTrackNameDiv " + (i === 0 ? "ove-track-template" : "ove-track-read ove-track-read-" + i),',
   },
   {
     name: "alignment track names carry a direction arrow",
     from: "minimal: true\n        }), name), ",
-    to: "minimal: true\n        }), window.oveReadTracks ? window.oveReadTracks.arrow(react_default.a, i, name, isTemplate) : null, name), ",
+    to: "minimal: true\n        }), window.oveReadTracks ? window.oveReadTracks.arrow(react_default.a, i, name, i === 0) : null, name), ",
   },
   {
     name: "previous/next mismatch buttons in the alignment top bar",
