@@ -1730,6 +1730,170 @@
     });
   }
 
+  // --------------------------------------------------- sanger clone check
+  // The app could already align reads and draw their traces. What it could
+  // not do was answer the question: is this colony the construct I designed?
+  // src/alignment/cloneCheck.js turns the alignment into that answer.
+  function openCloneCheck({ template } = {}) {
+    const CC = window.oveCloneCheck;
+    const AL = window.oveLocalAligner;
+    const { seqData: construct, name } = current(template);
+    const reads = [];
+    const readsBox = h("div");
+    const out = h("div");
+
+    const renderReads = () => {
+      readsBox.innerHTML = "";
+      if (!reads.length) {
+        readsBox.appendChild(h("div", { className: "ove-cl-hint" }, "No reads yet \u2014 add the .ab1 traces (or their sequences) from this colony."));
+        return;
+      }
+      readsBox.appendChild(
+        U.table(
+          [
+            { title: "Read", render: (r) => r.name },
+            { title: "Bases", render: (r) => `${r.seqData.sequence.length}` },
+            {
+              title: "",
+              render: (r) =>
+                U.button("Remove", () => {
+                  reads.splice(reads.indexOf(r), 1);
+                  renderReads();
+                }, { icon: "cross" }),
+            },
+          ],
+          reads
+        )
+      );
+    };
+    renderReads();
+
+    const picker = sequencePicker("Add a read", (sd) => {
+      reads.push({ name: sd.name || `read ${reads.length + 1}`, seqData: sd });
+      renderReads();
+    });
+    const addMany = U.button("Add read files\u2026", async () => {
+      const picked = await pickFiles(true);
+      picked.forEach((sd) => reads.push({ name: sd.name || `read ${reads.length + 1}`, seqData: sd }));
+      renderReads();
+    }, { icon: "folder-open" });
+
+    const check = wrapTry(() => {
+      out.innerHTML = "";
+      if (!reads.length) throw new Error("Add at least one read");
+      const refSeq = construct.sequence;
+      const features = (construct.features || []).filter((f) => f && f.name);
+
+      const reports = reads.map((r) => {
+        const aligned = AL.alignBestStrand(refSeq, r.seqData.sequence);
+        return CC.readReport({ ...aligned, name: r.name, reversed: aligned.reversed });
+      });
+
+      const v = CC.verdict(reports, refSeq.length);
+      out.appendChild(U.callout(v.text, v.level));
+
+      out.appendChild(
+        U.table(
+          [
+            { title: "Read", render: (r) => r.name },
+            { title: "Strand", render: (r) => (r.reversed ? "reverse" : "forward") },
+            { title: "Covers", render: (r) => (r.start === null ? "nothing" : `${oneBased(r.start)}\u2013${oneBased(r.end)} (${r.covered} bp)`) },
+            { title: "Identity", render: (r) => `${U.fmt(r.identity, 1)}%` },
+            {
+              title: "Differences",
+              render: (r) => {
+                const n = r.mismatches.length + r.insertions.length + r.deletions.length;
+                return n ? h("span", { className: "ove-cl-warn" }, String(n)) : "none";
+              },
+            },
+          ],
+          reports
+        )
+      );
+
+      const diffs = [];
+      reports.forEach((r) => {
+        r.mismatches.forEach((m) =>
+          diffs.push({ read: r.name, at: m.at, what: `${m.ref} \u2192 ${m.read}`, kind: "substitution", newBase: m.read })
+        );
+        r.insertions.forEach((i) => diffs.push({ read: r.name, at: i.at, what: `+${i.bases}`, kind: "insertion" }));
+        r.deletions.forEach((d) => diffs.push({ read: r.name, at: d.at, what: `\u2212${d.length} bp`, kind: "deletion" }));
+      });
+      diffs.sort((a, b) => a.at - b.at);
+
+      if (diffs.length) {
+        out.appendChild(
+          U.table(
+            [
+              { title: "Position", render: (d) => String(oneBased(d.at)) },
+              { title: "Change", render: (d) => h("span", { className: "ove-cl-seq" }, d.what) },
+              { title: "In", render: (d) => CC.featuresAt(features, d.at).join(", ") || "\u2013" },
+              {
+                title: "Effect",
+                render: (d) => {
+                  if (d.kind !== "substitution") {
+                    const inCds = features.some((f) => String(f.type).toUpperCase() === "CDS" && d.at >= f.start && d.at <= f.end);
+                    return inCds ? h("span", { className: "ove-cl-warn" }, "frameshift risk") : "\u2013";
+                  }
+                  const hit = features
+                    .filter((f) => String(f.type).toUpperCase() === "CDS")
+                    .map((f) => CC.consequence(refSeq, f, d.at, d.newBase))
+                    .find(Boolean);
+                  if (!hit) return "\u2013";
+                  return h("span", { className: hit.kind === "silent" ? "" : "ove-cl-warn" }, hit.text);
+                },
+              },
+              { title: "Seen in", render: (d) => d.read },
+            ],
+            diffs
+          )
+        );
+      }
+
+      const cov = CC.coverage(reports, refSeq.length);
+      if (cov.gaps.length) {
+        out.appendChild(
+          h(
+            "div",
+            { className: "ove-cl-hint" },
+            `Not read: ${cov.gaps.slice(0, 8).map((g) => `${oneBased(g.start)}\u2013${oneBased(g.end)}`).join(", ")}${cov.gaps.length > 8 ? `, and ${cov.gaps.length - 8} more` : ""}.`
+          )
+        );
+      }
+      out.appendChild(
+        U.button("Copy report", () => U.copyText(reportText(reports, diffs, cov, v), "Report copied"), { icon: "clipboard" })
+      );
+    });
+
+    function reportText(reports, diffs, cov, v) {
+      const lines = [`${name}: ${v.text}`, ""];
+      reports.forEach((r) =>
+        lines.push(
+          `${r.name}\t${r.reversed ? "reverse" : "forward"}\t${r.start === null ? "no match" : `${oneBased(r.start)}-${oneBased(r.end)}`}\t${r.identity.toFixed(1)}%`
+        )
+      );
+      if (diffs.length) {
+        lines.push("", "position\tchange\tread");
+        diffs.forEach((d) => lines.push(`${oneBased(d.at)}\t${d.what}\t${d.read}`));
+      }
+      if (cov.gaps.length) {
+        lines.push("", `unread: ${cov.gaps.map((g) => `${oneBased(g.start)}-${oneBased(g.end)}`).join(", ")}`);
+      }
+      return lines.join("\n");
+    }
+
+    U.openDialog({
+      title: "Check a Clone Against Its Sanger Reads",
+      width: 960,
+      body: [
+        templatePicker("Construct", "cloneCheck", template),
+        U.section("Reads", U.row(picker, addMany), readsBox),
+        out,
+      ],
+      footer: [U.button("Check", check, { intent: "primary", icon: "endorsed" })],
+    });
+  }
+
   // ------------------------------------------------------- golden gate
   // One pot, one enzyme, parts that carry their own overhangs. The work is
   // not the ligation -- src/cloning/goldenGate.js already decides the order
@@ -1969,6 +2133,28 @@
     const tableBox = h("div", { style: { maxHeight: "420px", overflow: "auto" } });
     const countLine = h("div", { className: "ove-cl-hint" });
 
+    // panels you keep, as opposed to the set saved with this one sequence
+    const ES = window.oveEnzymeSets;
+    const store = (() => {
+      try {
+        return window.localStorage;
+      } catch (e) {
+        return null;
+      }
+    })();
+    const setsPicker = U.select([{ value: "", label: "\u2014 saved sets \u2014" }], "", { width: 200 });
+    const refreshSets = () => {
+      const chosen = setsPicker.select.value;
+      setsPicker.select.innerHTML = "";
+      [{ value: "", label: "\u2014 saved sets \u2014" }, ...ES.names(store).map((n) => ({ value: n, label: n }))].forEach((o) => {
+        const opt = document.createElement("option");
+        opt.value = o.value;
+        opt.textContent = o.label;
+        setsPicker.select.appendChild(opt);
+      });
+      setsPicker.select.value = ES.names(store).includes(chosen) ? chosen : "";
+    };
+
     const nameTitle = (r) => {
       const who = EV.vendorsFor(r.name);
       return [
@@ -2044,6 +2230,7 @@
       editorApi.updateEditor({ restrictionEnzymes: { filteredRestrictionEnzymes: ET.toMapFilter(selected) } });
     };
 
+    refreshSets();
     query.addEventListener("input", draw);
     cutsFilter.select.addEventListener("change", draw);
     shareRow.input.addEventListener("change", draw);
@@ -2083,6 +2270,32 @@
         ),
       ],
       footer: [
+        U.field("Set", setsPicker.el),
+        U.button("Apply", () => {
+          const picked = setsPicker.select.value;
+          if (!picked) return U.toast("Choose a saved set first", "warning");
+          Object.keys(selected).forEach((k) => delete selected[k]);
+          ES.get(store, picked).forEach((k) => (selected[k] = true));
+          apply();
+          draw();
+          U.toast(`Applied "${picked}"`, "success");
+        }, { icon: "tick" }),
+        U.button("Save as\u2026", () => {
+          const chosen = Object.keys(selected);
+          if (!chosen.length) return U.toast("Tick some enzymes first", "warning");
+          const label = window.prompt("Name this set", setsPicker.select.value || "my panel");
+          if (!label) return;
+          ES.save(store, label, chosen);
+          refreshSets();
+          setsPicker.select.value = label.trim();
+          U.toast(`Saved "${label.trim()}" \u2014 ${chosen.length} enzymes`, "success");
+        }, { icon: "floppy-disk" }),
+        U.button("Delete set", () => {
+          const picked = setsPicker.select.value;
+          if (!picked) return U.toast("Choose a saved set first", "warning");
+          ES.remove(store, picked);
+          refreshSets();
+        }, { icon: "trash" }),
         U.button("Clear the map filter", () => {
           Object.keys(selected).forEach((k) => delete selected[k]);
           apply();
@@ -2390,6 +2603,7 @@
     checkDigest: openCheckDigest,
     enzymes: openEnzymeTable,
     goldenGate: openGoldenGate,
+    cloneCheck: openCloneCheck,
     codons: openCodonTable,
   };
   function open(tool) {
@@ -2410,6 +2624,7 @@
       "--",
       { text: "Enzymes on the Map…", icon: "th-list", onClick: () => open("enzymes") },
       { text: "Check Digest (which cut proves the clone)…", icon: "endorsed", onClick: () => open("checkDigest") },
+      { text: "Check a Clone Against Its Sanger Reads…", icon: "confirm", onClick: () => open("cloneCheck") },
       { text: "Agarose Gel Simulator…", icon: "timeline-bar-chart", onClick: () => open("gel") },
       { text: "Codon Usage Table…", icon: "th", onClick: () => open("codons") },
       "simulateDigestion",
