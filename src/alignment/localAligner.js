@@ -238,33 +238,32 @@
     let refPos = 0;
     let first = null;
     let last = null;
-    let used = 0; // read bases placed so far
-    let lapAt = null; // where the read came round to a base it had already read
+    // A read longer than the plasmid comes round to bases it has already read,
+    // and a row one plasmid long has no second column for them. Rather than
+    // drop them -- which hides an indel and leaves the chromatogram out of
+    // step with the bases drawn under it -- everything from the lap onwards
+    // hangs off the end of the row, in columns the plasmid has no base for. So
+    // the whole read is always on screen, and what it has over and above one
+    // turn of the plasmid is there to be read.
+    let tail = "";
     for (let col = 0; col < best.refAligned.length; col++) {
       const r = best.refAligned[col];
       const q = best.readAligned[col];
+      if (tail) {
+        if (q !== "-") tail += q;
+        continue;
+      }
       if (r === "-") {
-        if (q !== "-") {
-          ins[refPos % n] += q;
-          used += 1;
-        }
+        if (q !== "-") ins[refPos % n] += q;
         continue;
       }
       if (q !== "-") {
         const at = refPos % n;
-        // A read longer than the plasmid comes round to bases it has already
-        // read. A row one plasmid long has no second column for them: keeping
-        // them would need a column that does not exist, and dropping them
-        // quietly -- which is what used to happen -- leaves the chromatogram
-        // out of step with the bases drawn under it from the lap onwards. So
-        // the read is cut where it laps, and `trimmedTo` says where, for the
-        // caller to cut the trace to match.
         if (cols[at] !== "-") {
-          lapAt = used;
-          break;
+          tail = q;
+          continue;
         }
         cols[at] = q;
-        used += 1;
         if (first === null) first = refPos;
         last = refPos;
       }
@@ -278,6 +277,8 @@
       refAligned += "-".repeat(ins[k].length) + ref[k];
       readAligned += ins[k] + cols[k];
     }
+    refAligned += "-".repeat(tail.length);
+    readAligned += tail;
     return {
       ...best,
       refAligned,
@@ -285,7 +286,7 @@
       wrapped: first < n && last >= n,
       refStart: first % n,
       refEnd: last % n,
-      trimmedTo: lapAt,
+      overhang: tail.length || null,
     };
   }
 
@@ -345,27 +346,6 @@
     return out;
   }
 
-  // Keep the first `count` base calls and the trace up to where they end, so
-  // the peaks still sit under the bases that are left.
-  function trimChromatogramTo(chrom, count) {
-    const out = { ...chrom };
-    ["baseCalls", "basePos", "qualNums"].forEach((key) => {
-      if (out[key]) out[key] = Array.prototype.slice.call(out[key], 0, count);
-    });
-    if (out.basePos && out.basePos.length) {
-      // leave one base's worth of trace past the last peak so its right half
-      // is still drawn
-      const last = out.basePos[out.basePos.length - 1];
-      const spacing = out.basePos.length > 1 ? last - out.basePos[out.basePos.length - 2] : 10;
-      const end = Math.round(last + spacing);
-      ["aTrace", "cTrace", "gTrace", "tTrace"].forEach((key) => {
-        if (out[key]) out[key] = Array.prototype.slice.call(out[key], 0, end);
-      });
-    }
-    delete out.baseTraces; // rebuilt from the trimmed peaks
-    return out;
-  }
-
   function hasRawTraces(chrom) {
     return (
       chrom && chrom.aTrace && chrom.cTrace && chrom.gTrace && chrom.tTrace && chrom.basePos
@@ -374,11 +354,7 @@
 
   // Mutates a sequence object from the alignment dialog so that its sequence
   // (and chromatogram) match what was aligned.
-  // `trimTo`, when set, is how many bases of the read the alignment could
-  // place; the rest lapped the plasmid. The sequence and its trace are cut to
-  // match, because OVE draws the trace against the bases in the row and the
-  // two have to be the same read.
-  function prepareSequenceForDisplay(seqObj, reversed, trimTo) {
+  function prepareSequenceForDisplay(seqObj, reversed) {
     let chrom = seqObj.chromatogramData;
     if (reversed) {
       seqObj.sequence = reverseComplement(seqObj.sequence);
@@ -389,13 +365,6 @@
       seqObj.primers = [];
       if (hasRawTraces(chrom)) chrom = reverseComplementChromatogram(chrom);
       else if (chrom) chrom = undefined;
-    }
-    if (trimTo != null && trimTo < seqObj.sequence.length) {
-      seqObj.sequence = seqObj.sequence.slice(0, trimTo);
-      if (chrom) chrom = trimChromatogramTo(chrom, trimTo);
-      // the toast that says so is gone in a few seconds, and the fact that
-      // this read is shorter than its file needs to outlast it
-      seqObj.name = `${seqObj.name || "Untitled"} (one turn)`;
     }
     if (hasRawTraces(chrom)) {
       chrom = { ...chrom, baseTraces: buildBaseTraces(chrom) };
@@ -453,13 +422,13 @@
           window.toastr &&
             window.toastr.warning(`${seqObj.name}: no match found on the reference`);
         }
-        if (res.trimmedTo != null) {
+        if (res.overhang) {
           window.toastr &&
             window.toastr.warning(
-              `${seqObj.name}: the read goes more than once round the plasmid; showing the first ${res.trimmedTo} bases.`
+              `${seqObj.name}: the read goes more than once round the plasmid; its last ${res.overhang} bases hang off the end of the alignment.`
             );
         }
-        prepareSequenceForDisplay(seqObj, res.reversed, res.trimmedTo);
+        prepareSequenceForDisplay(seqObj, res.reversed);
         results.push(res);
       }
 
@@ -506,7 +475,6 @@
     reverseComplement,
     reverseComplementChromatogram,
     buildBaseTraces,
-    trimChromatogramTo,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   if (typeof window !== "undefined") window.oveLocalAligner = api;

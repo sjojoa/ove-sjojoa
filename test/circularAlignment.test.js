@@ -91,43 +91,40 @@ describe("a read that goes more than once round the plasmid", () => {
     "CCGGATTACAGCATCAGGCATTACGCATCAGGCATTAGCAGTCAGCATCGGATTCATTAGCATCAGCTAGCTAACGGTAAC";
   const n = plasmid.length;
 
-  it("says where the read lapped instead of dropping those bases in silence", () => {
+  it("keeps every base of the read, hanging the lap off the end of the row", () => {
     const read = plasmid + plasmid.slice(0, 40);
     const res = A.alignCircular(plasmid, read);
-    assert.strictEqual(res.trimmedTo, n);
-    // every base still in the row is one the read really has
-    assert.strictEqual(res.readAligned.replace(/-/g, "").length, n);
+    assert.strictEqual(res.overhang, 40);
+    // nothing of the read is lost
+    assert.strictEqual(res.readAligned.replace(/-/g, "").length, read.length);
+    // and the plasmid has no base under those last columns
+    assert.strictEqual(res.refAligned.slice(-40), "-".repeat(40));
+    assert.strictEqual(res.readAligned.slice(-40), plasmid.slice(0, 40));
   });
 
   it("leaves a read that fits exactly alone", () => {
     const res = A.alignCircular(plasmid, plasmid);
-    assert.strictEqual(res.trimmedTo, null);
+    assert.strictEqual(res.overhang, null);
+    assert.strictEqual(res.refAligned, plasmid);
   });
 
   it("leaves a short read alone", () => {
     const res = A.alignCircular(plasmid, plasmid.slice(40, 120));
-    assert.strictEqual(res.trimmedTo, null);
+    assert.strictEqual(res.overhang, null);
   });
 
-  it("cuts the trace to the same bases, so peaks stay under their own calls", () => {
-    // 20 peaks, 10 trace points apart
-    const chrom = {
-      baseCalls: "ACGTACGTACGTACGTACGT".split(""),
-      basePos: Array.from({ length: 20 }, (_, i) => 5 + i * 10),
-      qualNums: Array.from({ length: 20 }, () => 40),
-    };
-    ["aTrace", "cTrace", "gTrace", "tTrace"].forEach((k) => {
-      chrom[k] = Array.from({ length: 205 }, (_, i) => i);
-    });
-    const out = A.trimChromatogramTo(chrom, 12);
-    assert.strictEqual(out.baseCalls.length, 12);
-    assert.strictEqual(out.basePos.length, 12);
-    assert.strictEqual(out.qualNums.length, 12);
-    // the 12th peak sits at 115, so the trace runs one base's width past it
-    assert.strictEqual(out.aTrace.length, 125);
-    assert.strictEqual(out.baseTraces, undefined);
-    // and the original is untouched
-    assert.strictEqual(chrom.baseCalls.length, 20);
-    assert.strictEqual(chrom.aTrace.length, 205);
+  it("still shows an insertion inside the read as a gap in the plasmid", () => {
+    const read = plasmid.slice(0, 100) + "GGG" + plasmid.slice(100) + plasmid.slice(0, 20);
+    const res = A.alignCircular(plasmid, read);
+    assert.strictEqual(res.overhang, 20);
+    assert.strictEqual(res.readAligned.replace(/-/g, "").length, read.length);
+    // the three inserted bases open a gap of their own, away from the overhang
+    assert.strictEqual(res.refAligned.length, n + 3 + 20);
+  });
+
+  it("does not claim a read ran off the end when it stops short", () => {
+    const res = A.alignCircular(plasmid, plasmid.slice(0, n - 5));
+    assert.strictEqual(res.overhang, null);
+    assert.strictEqual(res.refAligned.length, n);
   });
 });
