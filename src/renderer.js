@@ -60,6 +60,13 @@ async function saveDoc(doc, { isSaveAs = false, sequenceDataToSave, onSuccessCal
     const live = doc.editor ? doc.editor.getState().sequenceData : doc.seqJson;
     sequenceDataToSave = JSON.parse(JSON.stringify(live || {}));
   }
+  // the enzymes chosen for the map travel with the file (#1)
+  if (window.oveEnzymeSet && doc.editor) {
+    const re = doc.editor.getState().restrictionEnzymes || {};
+    sequenceDataToSave = window.oveEnzymeSet.write(sequenceDataToSave, window.oveEnzymeSet.fromFilter(re.filteredRestrictionEnzymes));
+  }
+  // read arrows belong to the alignment view, not to the plasmid
+  if (window.oveReadTracks) sequenceDataToSave = window.oveReadTracks.strip(sequenceDataToSave);
   const filters = window.oveSequenceFileFilters.SAVE_FILTERS;
 
   let newFilePath = doc.filePath;

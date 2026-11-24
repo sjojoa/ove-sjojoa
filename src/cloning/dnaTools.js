@@ -327,10 +327,24 @@
 
   function cutPositions(seqData, enzymeNames) {
     const cuts = [];
+    const n = seqData.sequence.length;
+    const circular = !!seqData.circular;
+    const wrap = (p) => ((p % n) + n) % n;
     for (const name of enzymeNames) {
       const enz = getEnzyme(name);
-      su.cutSequenceByRestrictionEnzyme(seqData.sequence, !!seqData.circular, enz).forEach((c) => {
-        cuts.push({ enzyme: enz.name, top: c.topSnipPosition, bottom: c.bottomSnipPosition });
+      su.cutSequenceByRestrictionEnzyme(seqData.sequence, circular, enz).forEach((c) => {
+        let top = wrap(c.topSnipPosition);
+        let bottom = wrap(c.bottomSnipPosition);
+        // A cut sitting on the origin comes back with one strand at 0 and the
+        // other at the far end of the sequence. An overhang is a few bases,
+        // never half a plasmid, so that gap means the cut straddles the
+        // origin: carry the later strand back round, or the "overhang" is
+        // read as the whole plasmid.
+        if (circular && Math.abs(top - bottom) > n / 2) {
+          if (top > bottom) top -= n;
+          else bottom -= n;
+        }
+        cuts.push({ enzyme: enz.name, top, bottom });
       });
     }
     const key = (c) => Math.min(c.top, c.bottom);
@@ -460,6 +474,23 @@
     return concatSeqData(parts, { name, circular: true });
   }
 
+  // Why a ligation will not close, and what would. For one vector fragment,
+  // try every insert fragment both ways round and report which end fails:
+  // "these ends can't be ligated" is a dead end, "fragment 2 fits reversed"
+  // is an answer.
+  function insertFits({ vector, vectorFragment, insert, fragments }) {
+    const v = fragmentPiece(vector, vectorFragment, false);
+    return (fragments || []).map((frag) => {
+      const ways = [false, true].map((flip) => {
+        const ins = fragmentPiece(insert, frag, flip);
+        const left = endsCompatible(v.right, ins.left);
+        const right = endsCompatible(ins.right, v.left);
+        return { flip, left, right, fits: left && right, leftEnd: ins.left, rightEnd: ins.right };
+      });
+      return { fragment: frag, ways, fits: ways.some((w) => w.fits) };
+    });
+  }
+
   // Restriction cloning: returns products for each insert orientation that ligates.
   function restrictionClone({ vector, vectorFragment, insert, insertFragment, name }) {
     const products = [];
@@ -478,7 +509,20 @@
           forward: !flip,
           notes: { note: ["Inserted by restriction cloning"] },
         });
-        products.push({ orientation: flip ? "reverse" : "forward", sequenceData: withMarker });
+        products.push({
+          orientation: flip ? "reverse" : "forward",
+          sequenceData: withMarker,
+          // where the two pieces sit, and what each ligation junction is made
+          // of, so a dialog can show the product before anyone orders anything
+          pieces: [
+            { name: vector.name || "vector", length: vLen },
+            { name: `${insert.name || "insert"}${flip ? " (reverse)" : ""}`, length: insertLen },
+          ],
+          joins: [
+            { overhang: (v.right && v.right.seq) || "", enzymes: [v.right && v.right.enzyme, ins.left && ins.left.enzyme] },
+            { overhang: (ins.right && ins.right.seq) || "", enzymes: [ins.right && ins.right.enzyme, v.left && v.left.enzyme] },
+          ],
+        });
       }
     }
     const selfLigates = !!ligateCircular([fragmentPiece(vector, vectorFragment, false)], "self");
@@ -702,7 +746,7 @@
     tm, duplexDG, bestDimer, bestHairpin, analyzeOligo, annealingTemps, DEFAULT_CONDITIONS,
     designPrimers, PRIMER_DEFAULTS, getEnzyme, COMMON_ENZYMES, DEFAULT_LEADER, enzymesByName,
     cutPositions, digest, sliceSeqData, reverseSeqData, concatSeqData, fragmentPiece, endsCompatible,
-    ligateCircular, restrictionClone, CODON_TABLE, chooseCodon, designMutagenesis, mutateSeqData,
+    ligateCircular, restrictionClone, insertFits, CODON_TABLE, chooseCodon, designMutagenesis, mutateSeqData,
     annealingRegion, designGibson, LADDERS, AGAROSE_RANGES, migration, laneBands,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api;

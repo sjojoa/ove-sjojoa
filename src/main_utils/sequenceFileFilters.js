@@ -14,7 +14,7 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   const EXTENSIONS = [
     "gb", "gbk", "genbank", "gp", "dna", "fasta", "fa", "fas", "fna", "ffn",
-    "gff", "gff3", "json", "txt",
+    "gff", "gff3", "json", "txt", "ab1", "scf",
   ];
 
   // What main.js can actually write (see the ove_saveFile handler): anything

@@ -32,9 +32,49 @@ const patches = [
     to: "    // (alignment kept in redux so it still shows after switching tabs)\n    this.onShortcutCopy",
   },
   {
+    // Two things were wrong with the trace canvas. It was sized in CSS pixels,
+    // so on a Retina screen the display blew every trace up 2x -- that is the
+    // softness. And a whole-plasmid read asks for a canvas wider than the
+    // 65,535px browsers allow, and an oversized canvas draws nothing at all.
+    // Paint at the device's own resolution, backing off only as far as the cap
+    // forces, and give the element an explicit CSS size so the height can be
+    // read back on later paints instead of the bitmap we just rescaled.
+    name: "chromatograms are drawn at the screen's real resolution",
+    from: "  var maxHeight = peakCanvas.height;",
+    to: "  var maxHeight = parseFloat(peakCanvas.style.height) || peakCanvas.height;",
+  },
+  {
+    name: "chromatograms fit the canvas size browsers allow",
+    from: "  var maxWidth = seqLengthWithGaps * charWidth;\n  peakCanvas.width = maxWidth;",
+    to:
+      "  var maxWidth = seqLengthWithGaps * charWidth;\n" +
+      "  var pxRatio = Math.min(window.devicePixelRatio || 1, 65535 / Math.max(maxWidth, 1));\n" +
+      "  peakCanvas.width = Math.round(maxWidth * pxRatio);\n" +
+      "  peakCanvas.height = Math.round(maxHeight * pxRatio);\n" +
+      "  peakCanvas.style.width = maxWidth + \"px\";\n" +
+      "  peakCanvas.style.height = maxHeight + \"px\";\n" +
+      "  ctx.setTransform(pxRatio, 0, 0, pxRatio, 0, 0);",
+  },
+  {
+    // a full-height trace pushes the next read off the screen
+    name: "chromatograms are not as tall",
+    from: '    ref: canvasRef,\n    height: "100"',
+    to: '    ref: canvasRef,\n    height: "62"',
+  },
+  {
+    name: "alignment track names are red, or blue for the selected read",
+    from: 'className: "alignmentTrackNameDiv",',
+    to: 'className: "alignmentTrackNameDiv " + (i === 0 ? "ove-track-template" : "ove-track-read ove-track-read-" + i),',
+  },
+  {
+    name: "alignment track names carry a direction arrow and row controls",
+    from: "minimal: true\n        }), name), ",
+    to: "minimal: true\n        }), window.oveReadTracks ? window.oveReadTracks.controls(react_default.a, i, name, i === 0) : null, name), ",
+  },
+  {
     name: "previous/next mismatch buttons in the alignment top bar",
     from: 'className: "alignmentViewBackButton"\n    })), ',
-    to: 'className: "alignmentViewBackButton"\n    })), window.oveRenderMismatchNav ? window.oveRenderMismatchNav(react_default.a, _this4) : null, ',
+    to: 'className: "alignmentViewBackButton"\n    })), window.oveRenderMismatchNav ? window.oveRenderMismatchNav(react_default.a, _this4) : null, window.oveReadTracks ? window.oveReadTracks.topBar(react_default.a) : null, ',
   },
   {
     name: "alignment feature labels shown by default",
@@ -407,12 +447,67 @@ const patches = [
         enzyme: cutsiteGroup[0].restrictionEnzyme,
         groups: groups`,
   },
+  {
+    name: "the editor's own ab1 reader accepts PLOC tag 1",
+    from: `  peakLocations: { tagName: "PLOC", tagNum: 2, typeToReturn: "getShort" },`,
+    to: `  peakLocations: { tagName: "PLOC", tagNum: 2, alsoTagNum: 1, typeToReturn: "getShort" },`,
+  },
+  {
+    name: "the editor's own ab1 reader falls back to the other tag number",
+    from: `      if (currTagName == inTag.tagName && tagNum === inTag.tagNum) {`,
+    to: `      const tagNumMatches =
+        tagNum === inTag.tagNum ||
+        (inTag.alsoTagNum !== undefined && tagNum === inTag.alsoTagNum && output === undefined);
+      if (currTagName == inTag.tagName && tagNumMatches) {`,
+  },
 ];
 
 if (!fs.existsSync(bundlePath)) {
   console.warn(`[patch-ove] ${bundlePath} not found, skipping`);
   process.exit(0);
 }
+
+// bio-parsers is patched too: its .ab1 reader looks for the peak locations
+// under PLOC tag 2 only, and plenty of sequencing vendors write PLOC tag 1.
+// Those files then crash the parser outright ("Cannot read properties of
+// undefined"), which is why real traces would not open.
+const ab1Path = path.join(__dirname, "..", "node_modules", "bio-parsers", "lib", "parsers", "ab1ToJson.js");
+const ab1Patches = [
+  {
+    name: "ab1 files that carry PLOC tag 1 instead of tag 2",
+    from: `      if (currTagName == inTag.tagName && tagNum === inTag.tagNum) {`,
+    to: `      var tagNumMatches = tagNum === inTag.tagNum || (inTag.alsoTagNum !== undefined && tagNum === inTag.alsoTagNum && output === undefined);
+
+      if (currTagName == inTag.tagName && tagNumMatches) {`,
+  },
+  {
+    name: "ab1 peak locations accept either tag number",
+    from: `  peakLocations: {
+    tagName: "PLOC",
+    tagNum: 2,`,
+    to: `  peakLocations: {
+    tagName: "PLOC",
+    tagNum: 2,
+    alsoTagNum: 1,`,
+  },
+];
+
+function applyPatches(file, list, label) {
+  if (!fs.existsSync(file)) {
+    console.warn(`[patch-ove] ${file} not found, skipping ${label}`);
+    return;
+  }
+  let text = fs.readFileSync(file, "utf8");
+  for (const { name, from, to } of list) {
+    if (text.includes(to)) console.log(`[patch-ove] already applied: ${name}`);
+    else if (text.includes(from)) {
+      text = text.split(from).join(to);
+      console.log(`[patch-ove] applied: ${name}`);
+    } else console.warn(`[patch-ove] target not found, skipped: ${name}`);
+  }
+  fs.writeFileSync(file, text);
+}
+applyPatches(ab1Path, ab1Patches, "bio-parsers");
 
 let source = fs.readFileSync(bundlePath, "utf8");
 for (const { name, from, to } of patches) {

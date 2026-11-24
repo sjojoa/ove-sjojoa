@@ -1,0 +1,19 @@
+LOCUS       gibson_insert  720 bp    DNA     linear   UNA 21-NOV-2026
+DEFINITION  gibson_insert.
+FEATURES             Location/Qualifiers
+     CDS             1..720
+                     /label="insert ORF (mock)"
+ORIGIN
+        1 gcgttaattt gattacactg attttcaaac attaccgaag taacctgtgc ctcaccctac
+       61 ccgtatctat aacgggtgag tacgtgaata ccaaggtacg ggcctcttca cacttgtatg
+      121 actcctatgt caccatggca tcatatctcc tcctgtaaaa agtaacgaac gcaacacttt
+      181 tatgcggaca aatccctcgt caaaccccaa taatttggca ggtagtacat aatcgctcta
+      241 tgtgatatgt acattatagg acaactataa tgaacctttg tgttcagggc cgagaatcga
+      301 agactgctgc agcaaccaat gccgacgcct agccgagggt gtgagactcc atgtcaactg
+      361 aagatattta cccactacag cggtacgggc ccgaatgtat tgtgactcaa atgcgcgtgg
+      421 accttcgatc atattgaact caggagattg attaggattc cgctgcatca tcagatagca
+      481 cgcagacaca tggtgcaacg cgactgtgta tctcagctat actctgttgc attcgactgt
+      541 acactgtgtg gccggccggt agcgaggtgc tttcgtcgat aagcgttttc aagacatgtg
+      601 cctaggtcta tcgtacatta ctacccaaca aattggggta cggctaagga ccaggatgaa
+      661 cgcgaggcat cgggtataaa gacacccttc tgtgaacagt agtgccggac gcgcttattg
+//

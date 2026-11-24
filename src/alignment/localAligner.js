@@ -217,6 +217,76 @@
     return { ...fwd, reversed: false, alignedInput: read };
   }
 
+  // A plasmid's origin is an arbitrary place to start writing it down, so a
+  // read can run off the end and carry on at base 1 -- a whole-plasmid read
+  // always does. Aligning against the sequence written twice lets the read
+  // land across that seam; the result is then folded back onto the real
+  // coordinates, so the read shows up at both ends of the view, which is what
+  // a circular alignment looks like when it is drawn in a line.
+  function alignCircular(ref, read) {
+    const n = ref.length;
+    const best = alignBestStrand(ref + ref, read);
+    const empty = { ...best, refAligned: ref, readAligned: "-".repeat(n) };
+    if (best.noSeed) return empty;
+
+    // Fold the doubled-reference alignment back onto the real coordinates:
+    // each read base lands on `refPos % n`. Bases the read has but the
+    // reference does not stay attached to the reference position they sit in
+    // front of, so an insertion still opens a gap in the plasmid row.
+    const cols = new Array(n).fill("-");
+    const ins = new Array(n).fill("");
+    let refPos = 0;
+    let first = null;
+    let last = null;
+    for (let col = 0; col < best.refAligned.length; col++) {
+      const r = best.refAligned[col];
+      const q = best.readAligned[col];
+      if (r === "-") {
+        if (q !== "-") ins[refPos % n] += q;
+        continue;
+      }
+      if (q !== "-") {
+        cols[refPos % n] = q;
+        if (first === null) first = refPos;
+        last = refPos;
+      }
+      refPos += 1;
+    }
+    if (first === null) return empty;
+
+    let refAligned = "";
+    let readAligned = "";
+    for (let k = 0; k < n; k++) {
+      refAligned += "-".repeat(ins[k].length) + ref[k];
+      readAligned += ins[k] + cols[k];
+    }
+    return {
+      ...best,
+      refAligned,
+      readAligned,
+      wrapped: first < n && last >= n,
+      refStart: first % n,
+      refEnd: last % n,
+    };
+  }
+
+  // Where a read sits on the reference, in reference coordinates (0-based,
+  // inclusive), ignoring the leading/trailing gaps of an overlap alignment.
+  function refSpan(refAligned, readAligned) {
+    let refPos = 0;
+    let first = null;
+    let last = null;
+    for (let c = 0; c < refAligned.length; c++) {
+      if (refAligned[c] === "-") continue;
+      if (readAligned[c] !== "-") {
+        if (first === null) first = refPos;
+        last = refPos;
+      }
+      refPos += 1;
+    }
+    return first === null ? null : { refStart: first, refEnd: last };
+  }
+
   // Per-base trace windows for OVE's chromatogram renderer, built from the raw
   // traces + peak positions. Always rebuilt so that trimmed or reversed reads
   // stay consistent (OVE's auto-trim does not trim baseTraces).
@@ -326,13 +396,25 @@
       const ref = template.sequence;
       const results = [];
       for (const seqObj of others) {
-        const res = alignBestStrand(ref, seqObj.sequence);
+        const res = template.circular ? alignCircular(ref, seqObj.sequence) : alignBestStrand(ref, seqObj.sequence);
+        if (res.refStart === undefined) Object.assign(res, refSpan(res.refAligned, res.readAligned));
         if (res.noSeed) {
           window.toastr &&
             window.toastr.warning(`${seqObj.name}: no match found on the reference`);
         }
         prepareSequenceForDisplay(seqObj, res.reversed);
         results.push(res);
+      }
+
+      // The same reads drawn as arrows on the map, so the two views show the
+      // same thing (they are a view of the alignment, not part of the file).
+      if (window.oveReadTracks) {
+        window.oveReadTracks.show({
+          results: results.map((res, idx) => ({ ...res, name: others[idx].name })),
+          template,
+          reads: others,
+          merge: (kept) => mergeToReference(ref, kept),
+        });
       }
 
       if (isPairwiseAlignment) {
@@ -359,8 +441,10 @@
 
   const api = {
     handleAlignment,
+    alignCircular,
     overlapAlign,
     alignBestStrand,
+    refSpan,
     mergeToReference,
     reverseComplement,
     reverseComplementChromatogram,

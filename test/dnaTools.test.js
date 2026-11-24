@@ -92,6 +92,26 @@ describe("dnaTools: restriction cloning", () => {
     assert.ok(prod.features.length > 5);
   });
 
+  it("reports where the pieces meet, so the junctions can be previewed", () => {
+    const P = require("../src/cloning/productPreview.js");
+    const vfrags = d.digest(vector, ["XhoI", "XbaI"]);
+    const backbone = vfrags.reduce((a, b) => (a.size > b.size ? a : b));
+    const insert = makeInsert("XbaI", "XhoI");
+    const ifrag = d.digest(insert, ["XbaI", "XhoI"]).reduce((a, b) => (a.size > b.size ? a : b));
+    const [product] = d.restrictionClone({ vector, vectorFragment: backbone, insert, insertFragment: ifrag, name: "p" }).products;
+    const seq = product.sequenceData.sequence.toUpperCase();
+    assert.strictEqual(product.pieces.reduce((n, pc) => n + pc.length, 0), seq.length);
+    const joins = P.ligationJoins({ pieces: product.pieces, joins: product.joins, sequence: seq, circular: true });
+    assert.strictEqual(joins.length, 2);
+    joins.forEach((j) => {
+      // the overhang really is the first bases of the right piece
+      assert.strictEqual(seq.slice(j.at, j.at + j.overhang.length) || seq.slice(0, j.overhang.length), j.overhang);
+      assert.strictEqual(j.enzymes.length, 2);
+    });
+    // both sites survive the ligation, so the insert can be cut back out
+    assert.strictEqual(d.cutPositions(product.sequenceData, ["XhoI", "XbaI"]).length, 2);
+  });
+
   it("wrongly oriented sites give the reverse product", () => {
     const vfrags = d.digest(vector, ["XhoI", "XbaI"]);
     const backbone = vfrags.reduce((a, b) => (a.size > b.size ? a : b));
@@ -210,5 +230,58 @@ describe("dnaTools: gels", () => {
   it("digest lanes sum to the plasmid size", () => {
     const bands = d.laneBands(vector, ["XhoI", "XbaI"]);
     assert.strictEqual(bands.reduce((s, b) => s + b.size, 0), vector.sequence.length);
+  });
+});
+
+describe("dnaTools: why a ligation will not close", () => {
+  it("names the fragment that fits, and which way round", () => {
+    const backbone = d.digest(vector, ["XhoI", "XbaI"]).reduce((a, b) => (a.size > b.size ? a : b));
+    // sites the wrong way round, so only the reversed fragment can close
+    const insert = makeInsert("XhoI", "XbaI");
+    const frags = d.digest(insert, ["XhoI", "XbaI"]);
+    const report = d.insertFits({ vector, vectorFragment: backbone, insert, fragments: frags });
+    const fitting = report.filter((r) => r.fits);
+    assert.strictEqual(fitting.length, 1);
+    assert.strictEqual(fitting[0].ways.find((w) => w.fits).flip, true);
+  });
+
+  it("says which end clashes when nothing fits", () => {
+    const backbone = d.digest(vector, ["XhoI", "XbaI"]).reduce((a, b) => (a.size > b.size ? a : b));
+    const insert = makeInsert("EcoRI", "BamHI");
+    const frags = d.digest(insert, ["EcoRI", "BamHI"]);
+    const report = d.insertFits({ vector, vectorFragment: backbone, insert, fragments: frags });
+    assert.ok(report.every((r) => !r.fits));
+    assert.ok(report.every((r) => r.ways.every((w) => !w.left && !w.right)));
+  });
+});
+
+describe("dnaTools: a cut on the origin", () => {
+  // The origin of a plasmid is an arbitrary place to start writing it down,
+  // so a site can straddle it. The two strands then come back from opposite
+  // ends of the sequence, and the overhang used to be read as the whole
+  // plasmid -- which silently produced ends that would ligate to nothing.
+  const body = "ACGTTGCATGCAAGCTTGGCTAGCATCGATCAGCTAGCTTAGCATCAGCTACGATCAGCATCAGCATCGACTAGCTACGATCAGCATCAGCATCGATCAG";
+  const atOrigin = { name: "origin", circular: true, sequence: "AATTC" + body + "G" }; // G^AATTC spanning base 1
+
+  it("leaves a four-base overhang, not the whole plasmid", () => {
+    const [frag] = d.digest(atOrigin, ["EcoRI"]);
+    assert.strictEqual(frag.left.seq, "AATT");
+    assert.strictEqual(frag.right.seq, "AATT");
+    assert.strictEqual(frag.left.type, "5'");
+  });
+
+  it("still accounts for every base", () => {
+    const frags = d.digest(atOrigin, ["EcoRI"]);
+    assert.strictEqual(
+      frags.reduce((total, f) => total + f.size, 0),
+      atOrigin.sequence.length
+    );
+  });
+
+  it("gives an end that can be ligated to an ordinary EcoRI end", () => {
+    const ordinary = { name: "plain", circular: true, sequence: body + "GAATTC" + body };
+    const [a] = d.digest(atOrigin, ["EcoRI"]);
+    const [b] = d.digest(ordinary, ["EcoRI"]);
+    assert.ok(d.endsCompatible(a.right, b.left));
   });
 });

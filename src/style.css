@@ -52,3 +52,34 @@
 .bp3-dark .ove-mismatch-detail {
   color: #a7b6c2;
 }
+
+/* Reads in an alignment: red, and blue for the one you have selected, to match
+   the arrows drawn over the map (src/alignment/readTracks.js). */
+.alignmentTrackNameDiv.ove-track-read {
+  background: #c23030 !important;
+}
+.alignmentTrackNameDiv.ove-track-read.ove-track-selected {
+  background: #3fa6da !important;
+}
+.ove-track-arrow {
+  padding: 0 4px;
+  font-size: 10px;
+  vertical-align: middle;
+}
+
+/* Row controls on an alignment track's name chip (src/alignment/readTracks.js):
+   collapse a trace, or take a read out of the alignment. Only the trace is a
+   CSS matter; removing a read re-merges the alignment, because the columns an
+   insertion holds open should close again once nothing needs them. */
+.ove-track-btn {
+  padding: 0 4px;
+  cursor: pointer;
+  opacity: 0.75;
+  user-select: none;
+}
+.ove-track-btn:hover {
+  opacity: 1;
+}
+.alignmentViewTrackContainer.ove-track-collapsed .chromatogram {
+  display: none;
+}

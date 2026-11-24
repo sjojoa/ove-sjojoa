@@ -231,6 +231,7 @@
     const fTail = tailEditor("Forward primer 5′ addition", seqData);
     const rTail = tailEditor("Reverse primer 5′ addition", seqData);
     const results = h("div");
+    const productBox = h("div");
     let pairs = [];
     let chosen = null;
     let tails = { f: "", r: "" };
@@ -297,14 +298,21 @@
             },
           ],
           pairs,
-          { onSelect: (p) => (chosen = p), selectedIndex: 0 }
+          { onSelect: (p) => { chosen = p; showProduct(); }, selectedIndex: 0 }
         ),
         U.callout(
           "Tm is for the annealing part only (tails in lowercase orange). Ta: Taq ≈ lower Tm − 5 °C; Q5/Phusion ≈ lower Tm + 3 °C (max 72). Hover ⚠ for details. Click a row to choose it.",
           "none"
         )
       );
+      showProduct();
     });
+
+    const showProduct = () => {
+      productBox.innerHTML = "";
+      if (!chosen) return;
+      productBox.appendChild(U.section("Product", pcrProductView({ seqData, pair: chosen, tails, name })));
+    };
 
     const needChosen = () => {
       if (!chosen) throw new Error("Design primers and choose a pair first");
@@ -352,6 +360,7 @@
         U.section("Primer rules", U.row(U.field("Target Tm °C", tmT), U.field("Min Tm", tmMin), U.field("Max Tm", tmMax), U.field("Min length", lenMin), U.field("Max length", lenMax)), cond.el),
         U.section("5′ additions (restriction sites, Kozak, tags…)", U.row(fTail.el, rTail.el)),
         results,
+        productBox,
       ],
       footer,
     });
@@ -855,6 +864,118 @@
     return box;
   }
 
+  // What the PCR will actually give you: the product's ends, and whether the
+  // pair can prime anywhere else on this template (extra bands).
+  function pcrProductView({ seqData, pair, tails, name }) {
+    const box = h("div");
+    const n = seqData.sequence.length;
+    const amp = D.circSlice(seqData.sequence, pair.productStart, pair.productEnd + 1, seqData.circular);
+    const total = amp.length + tails.f.length + tails.r.length;
+    const parts = [
+      tails.f.length ? `${tails.f.length} nt 5\u2032 addition` : null,
+      `${amp.length} bp of ${name} (${oneBased(pair.productStart)}\u2013${oneBased(pair.productEnd)})`,
+      tails.r.length ? `${tails.r.length} nt 5\u2032 addition` : null,
+    ].filter(Boolean);
+    box.appendChild(U.callout(`${total} bp linear product: ${parts.join(" + ")}.`, "success"));
+
+    const flank = 15;
+    const ends = [
+      { end: "5\u2032", tail: tails.f, body: amp.slice(0, flank), tailFirst: true },
+      { end: "3\u2032", tail: D.revcomp(tails.r), body: amp.slice(-flank), tailFirst: false },
+    ];
+    box.appendChild(
+      U.table(
+        [
+          { title: "End of the product", render: (e) => e.end },
+          {
+            title: "Sequence (5\u2032 addition in colour)",
+            render: (e) =>
+              h(
+                "span",
+                { className: "ove-cl-seq" },
+                e.tailFirst ? U.primerSpan("", e.tail) : h("span", { className: "ove-cl-flank" }, e.body),
+                e.tailFirst ? h("span", { className: "ove-cl-flank" }, e.body) : U.primerSpan("", e.tail)
+              ),
+          },
+        ],
+        ends
+      )
+    );
+
+    // Extra bands: either primer binding a second time is the usual cause.
+    let sites;
+    try {
+      sites = {
+        f: findBindingSites(seqData.sequence, seqData.circular, tails.f + pair.forward.seq, 1),
+        r: findBindingSites(seqData.sequence, seqData.circular, tails.r + pair.reverse.seq, 1),
+      };
+    } catch (e) {
+      return box; // the preview is worth having even if the search fails
+    }
+    const products = PV.pcrProducts({
+      forwardSites: sites.f.filter((s) => s.strand === 1),
+      reverseSites: sites.r.filter((s) => s.strand === -1),
+      templateLength: n,
+      circular: !!seqData.circular,
+    });
+    const expected = products.find((p) => p.start === pair.productStart && p.end === pair.productEnd);
+    const extras = products.filter((p) => p !== expected);
+    if (!expected || !extras.length) {
+      box.appendChild(
+        h("div", { className: "ove-cl-hint" }, `Each primer binds ${sites.f.length === 1 && sites.r.length === 1 ? "once" : `${sites.f.length}\u00d7 / ${sites.r.length}\u00d7`} on this template, giving one product.`)
+      );
+      return box;
+    }
+    box.appendChild(
+      U.callout(
+        `This pair can also prime elsewhere on ${name}: ${extras
+          .map((p) => `${p.size} bp (${oneBased(p.start)}\u2013${oneBased(p.end)}${p.mismatches ? `, ${p.mismatches} mismatch${p.mismatches > 1 ? "es" : ""}` : ", exact"})`)
+          .join(", ")}. Expect extra bands \u2014 move a primer, or gel-purify the ${expected.size} bp band.`,
+        "warning"
+      )
+    );
+    return box;
+  }
+
+  // A ligation junction has no Tm or uniqueness question -- what you want to
+  // see is the scar: which two ends met, and the sequence they made.
+  function ligationView(joins) {
+    return U.table(
+      [
+        { title: "Junction", render: (j) => `${j.after} \u2192 ${j.before}` },
+        { title: "Ends", render: (j) => (j.enzymes.length ? j.enzymes.join(" + ") : "\u2013") },
+        { title: "Overhang", render: (j) => (j.blunt ? "blunt" : `${j.overhang.length} nt ${j.overhang}`) },
+        {
+          title: "Across the junction (overhang in colour)",
+          render: (j) =>
+            h(
+              "span",
+              { className: "ove-cl-seq" },
+              h("span", { className: "ove-cl-flank" }, j.before5),
+              U.primerSpan("", j.overhang),
+              h("span", { className: "ove-cl-flank" }, j.after3)
+            ),
+        },
+      ],
+      joins
+    );
+  }
+
+  // How often each enzyme still cuts the product: 0 means the site was lost,
+  // 2 means you can cut the insert back out.
+  function recutLine(seqData, names) {
+    if (!names.length) return null;
+    const cuts = D.cutPositions(seqData, names);
+    const text = names
+      .map((n) => {
+        const enz = D.getEnzyme(n);
+        const count = cuts.filter((c) => c.enzyme === enz.name).length;
+        return `${enz.name} ${count}\u00d7`;
+      })
+      .join(", ");
+    return h("div", { className: "ove-cl-hint" }, `Sites left in the product: ${text}.`);
+  }
+
   // Each piece's Tm, worked out from the overlap the junction actually has.
   function withTms(joins) {
     return joins.map((j) => ({ ...j, tm: j.overlap ? D.tm(j.overlap) : null }));
@@ -1011,6 +1132,15 @@
     let insert = null;
     let vFrag = null;
     let iFrag = null;
+    let lastInsertFrags = [];
+    const endsVerdict = (way) =>
+      way.fits
+        ? "both ends fit"
+        : !way.left && !way.right
+        ? "neither end fits"
+        : way.left
+        ? `left end fits, right end (${describeEnd(way.rightEnd)}) does not`
+        : `right end fits, left end (${describeEnd(way.leftEnd)}) does not`;
 
     const digestVector = wrapTry(() => {
       const names = enzymeNames(vE1.input, vE2.input);
@@ -1035,6 +1165,7 @@
         // uncut linear insert (e.g. blunt PCR product)
         const frag = { index: 0, start: 0, end: insert.sequence.length, size: insert.sequence.length, left: { type: "blunt", seq: "", enzyme: "PCR end" }, right: { type: "blunt", seq: "", enzyme: "PCR end" } };
         iFrag = frag;
+        lastInsertFrags = [frag];
         iFragsBox.appendChild(fragmentTable([frag], (f) => (iFrag = f), 0));
         return;
       }
@@ -1044,6 +1175,7 @@
       const internal = frags.filter((f) => f.left && f.right && f.left.type !== "end" && f.right.type !== "end");
       const pick = (internal.length ? internal : frags).reduce((a, b) => (a.size > b.size ? a : b));
       iFrag = pick;
+      lastInsertFrags = frags;
       iFragsBox.appendChild(fragmentTable(frags, (f) => (iFrag = f), frags.indexOf(pick), insert.sequence.length));
     });
     [vE1, vE2].forEach((e) => e.input.addEventListener("change", digestVector));
@@ -1068,6 +1200,34 @@
             "danger"
           )
         );
+        // a dead end is not an answer: say whether any other fragment of this
+        // insert would close the circle, and which way round
+        const report = D.insertFits({ vector, vectorFragment: vFrag, insert, fragments: lastInsertFrags });
+        const fitting = report.filter((r) => r.fits);
+        if (fitting.length) {
+          out.appendChild(
+            U.callout(
+              `${fitting
+                .map((r) => {
+                  const way = r.ways.find((w) => w.fits);
+                  return `the ${r.fragment.size} bp fragment${way.flip ? ", reversed," : ""} would close it`;
+                })
+                .join("; ")}. Choose it in the Insert table above.`,
+              "primary"
+            )
+          );
+        } else {
+          out.appendChild(
+            U.table(
+              [
+                { title: "Insert fragment", render: (r) => `${r.fragment.size} bp` },
+                { title: "As cut", render: (r) => endsVerdict(r.ways[0]) },
+                { title: "Reversed", render: (r) => endsVerdict(r.ways[1]) },
+              ],
+              report
+            )
+          );
+        }
         return;
       }
       if (res.products.length === 2) out.appendChild(U.callout("The insert can go in both orientations (non-directional cloning) — screen colonies for the one you want.", "warning"));
@@ -1097,6 +1257,21 @@
           res.products
         )
       );
+      const names = [...new Set([...enzymeNames(vE1.input, vE2.input), ...enzymeNames(iE1.input, iE2.input)])];
+      res.products.forEach((p) => {
+        const seq = p.sequenceData.sequence;
+        let at = 0;
+        const previewPieces = (p.pieces || []).map((pc) => {
+          const piece = { name: pc.name, sequence: seq.slice(at, at + pc.length) };
+          at += pc.length;
+          return piece;
+        });
+        if (!previewPieces.length) return;
+        out.appendChild(productSummary({ pieces: previewPieces, sequence: seq, circular: true }));
+        out.appendChild(ligationView(PV.ligationJoins({ pieces: p.pieces, joins: p.joins, sequence: seq, circular: true })));
+        const recut = recutLine(p.sequenceData, names);
+        if (recut) out.appendChild(recut);
+      });
     });
 
     U.openDialog({
@@ -1555,7 +1730,678 @@
     });
   }
 
-  function openGelSimulator({ template } = {}) {
+  // --------------------------------------------------- sanger clone check
+  // The app could already align reads and draw their traces. What it could
+  // not do was answer the question: is this colony the construct I designed?
+  // src/alignment/cloneCheck.js turns the alignment into that answer.
+  function openCloneCheck({ template } = {}) {
+    const CC = window.oveCloneCheck;
+    const AL = window.oveLocalAligner;
+    const { seqData: construct, name } = current(template);
+    const reads = [];
+    const readsBox = h("div");
+    const out = h("div");
+
+    const renderReads = () => {
+      readsBox.innerHTML = "";
+      if (!reads.length) {
+        readsBox.appendChild(h("div", { className: "ove-cl-hint" }, "No reads yet \u2014 add the .ab1 traces (or their sequences) from this colony."));
+        return;
+      }
+      readsBox.appendChild(
+        U.table(
+          [
+            { title: "Read", render: (r) => r.name },
+            { title: "Bases", render: (r) => `${r.seqData.sequence.length}` },
+            {
+              title: "",
+              render: (r) =>
+                U.button("Remove", () => {
+                  reads.splice(reads.indexOf(r), 1);
+                  renderReads();
+                }, { icon: "cross" }),
+            },
+          ],
+          reads
+        )
+      );
+    };
+    renderReads();
+
+    const picker = sequencePicker("Add a read", (sd) => {
+      reads.push({ name: sd.name || `read ${reads.length + 1}`, seqData: sd });
+      renderReads();
+    });
+    const addMany = U.button("Add read files\u2026", async () => {
+      const picked = await pickFiles(true);
+      picked.forEach((sd) => reads.push({ name: sd.name || `read ${reads.length + 1}`, seqData: sd }));
+      renderReads();
+    }, { icon: "folder-open" });
+
+    const check = wrapTry(() => {
+      out.innerHTML = "";
+      if (!reads.length) throw new Error("Add at least one read");
+      const refSeq = construct.sequence;
+      const features = (construct.features || []).filter((f) => f && f.name);
+
+      const reports = reads.map((r) => {
+        // a read of a plasmid can run off the end and carry on at base 1
+        const aligned = construct.circular
+          ? AL.alignCircular(refSeq, r.seqData.sequence)
+          : AL.alignBestStrand(refSeq, r.seqData.sequence);
+        return CC.readReport({ ...aligned, name: r.name, reversed: aligned.reversed });
+      });
+
+      const v = CC.verdict(reports, refSeq.length);
+      out.appendChild(U.callout(v.text, v.level));
+
+      out.appendChild(
+        U.table(
+          [
+            { title: "Read", render: (r) => r.name },
+            { title: "Strand", render: (r) => (r.reversed ? "reverse" : "forward") },
+            { title: "Covers", render: (r) => (r.start === null ? "nothing" : `${oneBased(r.start)}\u2013${oneBased(r.end)} (${r.covered} bp)`) },
+            { title: "Identity", render: (r) => `${U.fmt(r.identity, 1)}%` },
+            {
+              title: "Differences",
+              render: (r) => {
+                const n = r.mismatches.length + r.insertions.length + r.deletions.length;
+                return n ? h("span", { className: "ove-cl-warn" }, String(n)) : "none";
+              },
+            },
+          ],
+          reports
+        )
+      );
+
+      const diffs = [];
+      reports.forEach((r) => {
+        r.mismatches.forEach((m) =>
+          diffs.push({ read: r.name, at: m.at, what: `${m.ref} \u2192 ${m.read}`, kind: "substitution", newBase: m.read })
+        );
+        r.insertions.forEach((i) => diffs.push({ read: r.name, at: i.at, what: `+${i.bases}`, kind: "insertion" }));
+        r.deletions.forEach((d) => diffs.push({ read: r.name, at: d.at, what: `\u2212${d.length} bp`, kind: "deletion" }));
+      });
+      diffs.sort((a, b) => a.at - b.at);
+
+      if (diffs.length) {
+        out.appendChild(
+          U.table(
+            [
+              { title: "Position", render: (d) => String(oneBased(d.at)) },
+              { title: "Change", render: (d) => h("span", { className: "ove-cl-seq" }, d.what) },
+              { title: "In", render: (d) => CC.featuresAt(features, d.at).join(", ") || "\u2013" },
+              {
+                title: "Effect",
+                render: (d) => {
+                  if (d.kind !== "substitution") {
+                    const inCds = features.some((f) => String(f.type).toUpperCase() === "CDS" && d.at >= f.start && d.at <= f.end);
+                    return inCds ? h("span", { className: "ove-cl-warn" }, "frameshift risk") : "\u2013";
+                  }
+                  const hit = features
+                    .filter((f) => String(f.type).toUpperCase() === "CDS")
+                    .map((f) => CC.consequence(refSeq, f, d.at, d.newBase))
+                    .find(Boolean);
+                  if (!hit) return "\u2013";
+                  return h("span", { className: hit.kind === "silent" ? "" : "ove-cl-warn" }, hit.text);
+                },
+              },
+              { title: "Seen in", render: (d) => d.read },
+            ],
+            diffs
+          )
+        );
+      }
+
+      const cov = CC.coverage(reports, refSeq.length);
+      if (cov.gaps.length) {
+        out.appendChild(
+          h(
+            "div",
+            { className: "ove-cl-hint" },
+            `Not read: ${cov.gaps.slice(0, 8).map((g) => `${oneBased(g.start)}\u2013${oneBased(g.end)}`).join(", ")}${cov.gaps.length > 8 ? `, and ${cov.gaps.length - 8} more` : ""}.`
+          )
+        );
+      }
+      out.appendChild(
+        U.button("Copy report", () => U.copyText(reportText(reports, diffs, cov, v), "Report copied"), { icon: "clipboard" })
+      );
+    });
+
+    function reportText(reports, diffs, cov, v) {
+      const lines = [`${name}: ${v.text}`, ""];
+      reports.forEach((r) =>
+        lines.push(
+          `${r.name}\t${r.reversed ? "reverse" : "forward"}\t${r.start === null ? "no match" : `${oneBased(r.start)}-${oneBased(r.end)}`}\t${r.identity.toFixed(1)}%`
+        )
+      );
+      if (diffs.length) {
+        lines.push("", "position\tchange\tread");
+        diffs.forEach((d) => lines.push(`${oneBased(d.at)}\t${d.what}\t${d.read}`));
+      }
+      if (cov.gaps.length) {
+        lines.push("", `unread: ${cov.gaps.map((g) => `${oneBased(g.start)}-${oneBased(g.end)}`).join(", ")}`);
+      }
+      return lines.join("\n");
+    }
+
+    U.openDialog({
+      title: "Check a Clone Against Its Sanger Reads",
+      width: 960,
+      body: [
+        templatePicker("Construct", "cloneCheck", template),
+        U.section("Reads", U.row(picker, addMany), readsBox),
+        out,
+      ],
+      footer: [U.button("Check", check, { intent: "primary", icon: "endorsed" })],
+    });
+  }
+
+  // ------------------------------------------------------- golden gate
+  // One pot, one enzyme, parts that carry their own overhangs. The work is
+  // not the ligation -- src/cloning/goldenGate.js already decides the order
+  // -- it is saying plainly what the overhangs will do.
+  function openGoldenGate({ template } = {}) {
+    const GG = window.oveGoldenGate;
+    const { seqData: vector, name } = current(template);
+    const enzymeIn = enzymeInput("BsaI", vector);
+    const productName = U.textInput(`${name}_assembly`, { width: 220 });
+    const partsBox = h("div");
+    const out = h("div");
+    const inserts = [];
+
+    const renderParts = () => {
+      partsBox.innerHTML = "";
+      if (!inserts.length) {
+        partsBox.appendChild(h("div", { className: "ove-cl-hint" }, "No parts yet \u2014 add the plasmids (or PCR products) carrying them."));
+        return;
+      }
+      partsBox.appendChild(
+        U.table(
+          [
+            { title: "Part", render: (p) => p.name },
+            { title: "Length", render: (p) => `${p.seqData.sequence.length} bp` },
+            {
+              title: "",
+              render: (p) =>
+                U.button("Remove", () => {
+                  inserts.splice(inserts.indexOf(p), 1);
+                  renderParts();
+                }, { icon: "cross" }),
+            },
+          ],
+          inserts
+        )
+      );
+    };
+    renderParts();
+
+    const picker = sequencePicker("Add a part", (sd) => {
+      inserts.push({ name: sd.name || `part ${inserts.length + 1}`, seqData: sd });
+      renderParts();
+    });
+
+    // every fragment of this input that could sit inside the circle
+    const candidatesOf = (seqData, enzyme) => {
+      const frags = D.digest(seqData, [enzyme]);
+      if (frags[0] && frags[0].uncut) return [];
+      return frags.filter(GG.usable).map((f) => ({ left: f.left, right: f.right, size: f.size, frag: f }));
+    };
+
+    const assemble = wrapTry(() => {
+      out.innerHTML = "";
+      const enzyme = enzymeIn.input.value.trim();
+      if (!enzyme) throw new Error("Choose a Type IIS enzyme (BsaI, BsmBI, BbsI\u2026)");
+      checkEnzymes([enzyme]);
+      if (!window.oveEnzymeTable.cutsOutsideSite(D.getEnzyme(enzyme))) {
+        out.appendChild(U.callout(`${enzyme} cuts inside its own recognition site, so it cannot leave the custom overhangs Golden Gate needs.`, "warning"));
+      }
+      if (!inserts.length) throw new Error("Add at least one part");
+
+      const parts = [{ name: `${name} (vector)`, seqData: vector }, ...inserts].map((p) => ({
+        name: p.name,
+        seqData: p.seqData,
+        candidates: candidatesOf(p.seqData, enzyme),
+      }));
+      const missed = parts.filter((p) => !p.candidates.length);
+      if (missed.length) {
+        out.appendChild(U.callout(`${enzyme} does not release anything from ${missed.map((p) => p.name).join(", ")}. A part needs a site on both sides, pointing inwards.`, "danger"));
+        return;
+      }
+
+      const order = GG.chain(parts);
+      if (!order) {
+        const stuck = GG.unmatched(parts);
+        out.appendChild(
+          U.callout(
+            stuck.length
+              ? `These parts do not make a circle: ${stuck.map((u) => `${u.name}'s ${u.overhang} overhang has nothing to join`).join("; ")}.`
+              : "These parts do not make a circle. Check that each overhang appears on exactly two parts.",
+            "danger"
+          )
+        );
+        out.appendChild(overhangTable(parts));
+        return;
+      }
+
+      GG.problems(order).forEach((p) => out.appendChild(U.callout(p.text, p.level)));
+
+      const pieces = order.map((step) => D.fragmentPiece(parts[step.index].seqData, step.fragment.frag, false));
+      const product = D.ligateCircular(pieces, productName.value || "assembly");
+      if (!product) throw new Error("The parts line up but will not ligate \u2014 please report this sequence");
+
+      // the enzyme sites go with the carrier plasmids: if any survive, the
+      // product will be cut again in the same pot
+      const leftover = D.cutPositions(product, [enzyme]).length;
+      out.appendChild(
+        U.callout(
+          leftover
+            ? `${leftover} ${enzyme} site${leftover > 1 ? "s" : ""} survive in the product, so it will be cut again in the pot. A part should carry its sites outside the piece being assembled.`
+            : `No ${enzyme} sites left in the product, so it is safe from the enzyme once assembled.`,
+          leftover ? "danger" : "success"
+        )
+      );
+
+      const previewPieces = order.map((step, i) => ({
+        name: step.name,
+        sequence: pieces[i].full.sequence.slice(0, pieces[i].full.sequence.length - ((pieces[i].right && pieces[i].right.seq.length) || 0)),
+      }));
+      out.appendChild(productSummary({ pieces: previewPieces, sequence: product.sequence, circular: true }));
+      out.appendChild(
+        ligationView(
+          PV.ligationJoins({
+            pieces: previewPieces.map((p) => ({ name: p.name, length: p.sequence.length })),
+            joins: order.map((step) => ({ overhang: (step.fragment.right && step.fragment.right.seq) || "", enzymes: [enzyme] })),
+            sequence: product.sequence,
+            circular: true,
+          })
+        )
+      );
+      out.appendChild(
+        h(
+          "div",
+          { style: { display: "flex", gap: "6px", marginTop: "8px" } },
+          U.button("Open product", () => openInNewWindow(product), { intent: "primary", icon: "document-open" }),
+          U.button("Save product\u2026", () => saveSeqToFile(product, productName.value || "assembly"), { icon: "floppy-disk" })
+        )
+      );
+    });
+
+    function overhangTable(parts) {
+      const rows = [];
+      parts.forEach((p) =>
+        p.candidates.forEach((c) =>
+          rows.push({ name: p.name, size: c.size, left: (c.left && c.left.seq) || "blunt", right: (c.right && c.right.seq) || "blunt" })
+        )
+      );
+      return U.table(
+        [
+          { title: "Part", render: (r) => r.name },
+          { title: "Fragment", render: (r) => `${r.size} bp` },
+          { title: "Left overhang", render: (r) => h("span", { className: "ove-cl-seq" }, r.left) },
+          { title: "Right overhang", render: (r) => h("span", { className: "ove-cl-seq" }, r.right) },
+        ],
+        rows
+      );
+    }
+
+    U.openDialog({
+      title: "Golden Gate / MoClo Assembly",
+      width: 940,
+      body: [
+        templatePicker("Destination vector", "goldenGate", template),
+        U.section("Enzyme", U.row(U.field("Type IIS enzyme", enzymeIn.el, "BsaI, BsmBI, BbsI\u2026"), U.field("Product name", productName))),
+        U.section("Parts", picker, partsBox),
+        out,
+      ],
+      footer: [U.button("Assemble", assemble, { intent: "primary", icon: "build" })],
+    });
+  }
+
+  // ------------------------------------------------------ enzyme table
+  // Which enzymes the map shows. Cutters are bold; a non-cutter can be
+  // chosen on purpose, so that if an edit ever creates that site it turns up
+  // on the map where you will notice it.
+  function openEnzymeTable({ template } = {}) {
+    const ET = window.oveEnzymeTable;
+    const EV = window.oveEnzymeVendors;
+    const VENDOR_KEY = "ove-enzyme-vendor";
+    const POOL_KEY = "ove-enzyme-pool";
+    let vendorCode = "N"; // New England Biolabs, the usual freezer
+    try {
+      const saved = localStorage.getItem(VENDOR_KEY);
+      if (saved !== null) vendorCode = saved;
+    } catch (e) {
+      /* a blocked localStorage is not worth failing over */
+    }
+    // which enzymes are even on the table: everything the database knows, or
+    // only what you could order. Catalogue enzymes by default -- a row for an
+    // enzyme nobody sells is a row you cannot act on.
+    const POOLS = [
+      { value: "commercial", label: "All commercial", test: (r) => EV.vendorsFor(r.name).length > 0 },
+      ...EV.VENDOR_LIST.map((v) => ({ value: v.code, label: v.name, test: (r) => EV.sells(v.code, r.name) })),
+      { value: "all", label: "Everything in the database", test: () => true },
+    ];
+    let poolValue = "commercial";
+    try {
+      const savedPool = localStorage.getItem(POOL_KEY);
+      if (savedPool && POOLS.some((p) => p.value === savedPool)) poolValue = savedPool;
+    } catch (e) {
+      /* no stored preference */
+    }
+    const poolPicker = U.select(POOLS.map((p) => ({ value: p.value, label: p.label })), poolValue, { width: 230 });
+    const { seqData, name } = current(template);
+    const doc = window.oveTabs && window.oveTabs.getActive();
+    const editorApi = doc && doc.editor;
+    const selected = {};
+    ((editorApi && editorApi.getState().restrictionEnzymes) || {}).filteredRestrictionEnzymes?.forEach((e) => {
+      if (e && e.value && !e.cutsThisManyTimes && e.value !== "type2s") selected[e.value.toLowerCase()] = true;
+    });
+
+    // one pass over the whole enzyme list; a 6 kb plasmid takes well under a
+    // second, and the answer only changes when the sequence does
+    const rows = Object.keys(D.enzymesByName)
+      .map((key) => {
+        const enz = D.enzymesByName[key];
+        let cuts = [];
+        try {
+          cuts = D.cutPositions(seqData, [enz.name]).map((c) => oneBased(Math.min(c.top, c.bottom)));
+        } catch (e) {
+          return null;
+        }
+        return ET.row(enz, cuts);
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const inPool = () => {
+      const pool = POOLS.find((p) => p.value === poolPicker.select.value) || POOLS[0];
+      return rows.filter(pool.test);
+    };
+    const regroup = () =>
+      ET.groupIsoschizomers(inPool(), {
+        preferred: D.COMMON_ENZYMES,
+        sells: (n) => EV.sells(vendorCode, n),
+        sold: (n) => EV.vendorsFor(n).length > 0,
+      }).sort((a, b) => a.name.localeCompare(b.name));
+    let grouped = regroup();
+
+    const vendorPicker = U.select(
+      [{ value: "", label: "Any supplier" }, ...EV.VENDOR_LIST.map((v) => ({ value: v.code, label: v.name }))],
+      vendorCode,
+      { width: 230 }
+    );
+    const query = U.textInput("", { width: 220 });
+    const shareRow = U.checkbox("isoschizomers share a row", true);
+    const cutsFilter = U.select(ET.FILTERS.map((f) => ({ value: f.value, label: f.label })), "one-long", { width: 200 });
+    const tableBox = h("div", { style: { maxHeight: "420px", overflow: "auto" } });
+    const countLine = h("div", { className: "ove-cl-hint" });
+
+    // panels you keep, as opposed to the set saved with this one sequence
+    const ES = window.oveEnzymeSets;
+    const store = (() => {
+      try {
+        return window.localStorage;
+      } catch (e) {
+        return null;
+      }
+    })();
+    const setsPicker = U.select([{ value: "", label: "\u2014 saved sets \u2014" }], "", { width: 200 });
+    const refreshSets = () => {
+      const chosen = setsPicker.select.value;
+      setsPicker.select.innerHTML = "";
+      [{ value: "", label: "\u2014 saved sets \u2014" }, ...ES.names(store).map((n) => ({ value: n, label: n }))].forEach((o) => {
+        const opt = document.createElement("option");
+        opt.value = o.value;
+        opt.textContent = o.label;
+        setsPicker.select.appendChild(opt);
+      });
+      setsPicker.select.value = ES.names(store).includes(chosen) ? chosen : "";
+    };
+
+    const nameTitle = (r) => {
+      const who = EV.vendorsFor(r.name);
+      return [
+        who.length ? `Sold by ${who.join(", ")}` : "No supplier listed",
+        r.aliases.length ? `Same site and cut as ${r.aliases.join(", ")}` : null,
+      ]
+        .filter(Boolean)
+        .join("\n");
+    };
+
+    const MAX_ROWS = 300;
+    // how many enzymes each filter would show, on the dropdown itself: the
+    // question "are there any two-cutters" is answered without clicking
+    const updateFilterCounts = (source) => {
+      [...cutsFilter.select.options].forEach((opt) => {
+        const f = ET.FILTERS.find((x) => x.value === opt.value);
+        if (!f) return;
+        opt.textContent = `${f.label} (${ET.filter(source, { query: query.value, cuts: f.value, selected: {} }).length})`;
+      });
+    };
+    const draw = () => {
+      const source = shareRow.input.checked ? grouped : inPool();
+      updateFilterCounts(source);
+      const shown = ET.filter(source, { query: query.value, cuts: cutsFilter.select.value, selected });
+      const capped = shown.slice(0, MAX_ROWS);
+      tableBox.innerHTML = "";
+      tableBox.appendChild(
+        U.table(
+          [
+            {
+              title: "On map",
+              render: (r) => {
+                const box = U.checkbox("", !!selected[r.key]);
+                box.input.addEventListener("change", () => {
+                  if (box.input.checked) selected[r.key] = true;
+                  else delete selected[r.key];
+                  apply();
+                  countLine.textContent = summary();
+                });
+                return box.el;
+              },
+            },
+            {
+              title: "Name",
+              render: (r) =>
+                h(
+                  "span",
+                  { className: r.cuts ? "ove-cl-cutter" : "ove-cl-noncutter", title: nameTitle(r) },
+                  r.name
+                ),
+            },
+            { title: "Site", render: (r) => h("span", { className: "ove-cl-seq" }, r.site) },
+            { title: "Overhang", render: (r) => r.overhang + (r.isType2S ? " \u00b7 Type IIS" : "") },
+            { title: "Cuts", render: (r) => String(r.cuts) },
+            { title: "Positions", render: (r) => (r.cuts ? r.positions.slice(0, 6).join(", ") + (r.cuts > 6 ? ` +${r.cuts - 6}` : "") : "\u2013") },
+          ],
+          capped
+        )
+      );
+      countLine.textContent = summary(shown.length, capped.length);
+    };
+
+    function summary(shownCount, drawnCount) {
+      const chosen = Object.keys(selected).length;
+      const source = shareRow.input.checked ? grouped : inPool();
+      const cutters = source.filter((r) => r.cuts).length;
+      const extra = shownCount !== undefined && drawnCount !== undefined && shownCount > drawnCount ? ` Showing the first ${drawnCount} of ${shownCount} \u2014 narrow the filter to see the rest.` : "";
+      return `${cutters} of ${source.length} enzymes cut ${name}. ${chosen ? `${chosen} chosen for the map` : "Nothing chosen: the map shows OVE's own filter"}.${extra}`;
+    }
+
+    const apply = () => {
+      if (!editorApi) return;
+      editorApi.updateEditor({ restrictionEnzymes: { filteredRestrictionEnzymes: ET.toMapFilter(selected) } });
+    };
+
+    refreshSets();
+    query.addEventListener("input", draw);
+    cutsFilter.select.addEventListener("change", draw);
+    shareRow.input.addEventListener("change", draw);
+    poolPicker.select.addEventListener("change", () => {
+      try {
+        localStorage.setItem(POOL_KEY, poolPicker.select.value);
+      } catch (e) {
+        /* preference just will not stick */
+      }
+      grouped = regroup();
+      draw();
+    });
+    vendorPicker.select.addEventListener("change", () => {
+      vendorCode = vendorPicker.select.value;
+      try {
+        localStorage.setItem(VENDOR_KEY, vendorCode);
+      } catch (e) {
+        /* preference just will not stick */
+      }
+      grouped = regroup();
+      draw();
+    });
+    draw();
+
+    U.openDialog({
+      title: "Enzymes on the map",
+      width: 940,
+      body: [
+        templatePicker("Sequence", "enzymes", template),
+        U.row(U.field("Choose from", poolPicker.el, "which enzymes are on the table"), U.field("Show", cutsFilter.el), U.field("Filter", query, "name or recognition site")),
+      U.row(U.field("Name them as", vendorPicker.el, "whose catalogue name to show"), shareRow.el),
+        countLine,
+        tableBox,
+        U.callout(
+          "Bold enzymes cut this sequence; faded ones do not. Choosing an enzyme that does not cut is deliberate \u2014 it stays on the map, so if an edit or an assembly ever creates that site, it appears where you will see it. The set is saved with the sequence the next time you save it. Hover a name to see its other names and who sells it.",
+          "none"
+        ),
+      ],
+      footer: [
+        U.field("Set", setsPicker.el),
+        U.button("Apply", () => {
+          const picked = setsPicker.select.value;
+          if (!picked) return U.toast("Choose a saved set first", "warning");
+          Object.keys(selected).forEach((k) => delete selected[k]);
+          ES.get(store, picked).forEach((k) => (selected[k] = true));
+          apply();
+          draw();
+          U.toast(`Applied "${picked}"`, "success");
+        }, { icon: "tick" }),
+        U.button("Save as\u2026", () => {
+          const chosen = Object.keys(selected);
+          if (!chosen.length) return U.toast("Tick some enzymes first", "warning");
+          const label = window.prompt("Name this set", setsPicker.select.value || "my panel");
+          if (!label) return;
+          ES.save(store, label, chosen);
+          refreshSets();
+          setsPicker.select.value = label.trim();
+          U.toast(`Saved "${label.trim()}" \u2014 ${chosen.length} enzymes`, "success");
+        }, { icon: "floppy-disk" }),
+        U.button("Delete set", () => {
+          const picked = setsPicker.select.value;
+          if (!picked) return U.toast("Choose a saved set first", "warning");
+          ES.remove(store, picked);
+          refreshSets();
+        }, { icon: "trash" }),
+        U.button("Clear the map filter", () => {
+          Object.keys(selected).forEach((k) => delete selected[k]);
+          apply();
+          draw();
+        }, { icon: "filter-remove" }),
+      ],
+    });
+  }
+
+  // --------------------------------------------------- check digest
+  // After a cloning, the question is which enzyme tells a right colony from
+  // a wrong one. Cut the construct every way the common enzymes allow, cut
+  // the parent the same way, and rank by what you could actually read off a
+  // gel (src/cloning/checkDigest.js does the scoring).
+  function openCheckDigest({ template } = {}) {
+    const { seqData: construct, name } = current(template);
+    const CD = window.oveCheckDigest;
+    const agarose = U.select(Object.keys(D.AGAROSE_RANGES).map((k) => ({ value: k, label: `${k}% agarose` })), "1", { width: 140 });
+    const pairsOn = U.checkbox("also try pairs of enzymes", true);
+    const out = h("div");
+    let parent = null;
+    const parentBox = h("div", { className: "ove-cl-hint" }, "No parent chosen: digests are ranked on readability alone.");
+    const picker = sequencePicker("Parent / empty vector (optional)", (sd) => {
+      parent = sd;
+      parentBox.textContent = `Parent: ${sd.name} \u2014 ${sd.sequence.length} bp`;
+      run();
+    });
+
+    // an enzyme that misses the parent still leaves it as one whole-length
+    // band -- treating that as an empty lane would make every clone band
+    // look new
+    const bandsOf = (sd, enzymes) => {
+      try {
+        const frags = D.digest(sd, enzymes);
+        if (frags[0] && frags[0].uncut) return { uncut: true, sizes: [sd.sequence.length] };
+        return { uncut: false, sizes: frags.map((f) => f.size) };
+      } catch (e) {
+        return { uncut: true, sizes: [sd.sequence.length] };
+      }
+    };
+
+    const run = wrapTry(() => {
+      const range = D.AGAROSE_RANGES[agarose.select.value] || D.AGAROSE_RANGES[1];
+      const cutters = D.COMMON_ENZYMES.filter((e) => !bandsOf(construct, [e]).uncut);
+      const combos = cutters.map((e) => [e]);
+      if (pairsOn.input.checked) {
+        for (let i = 0; i < cutters.length; i++) {
+          for (let j = i + 1; j < cutters.length; j++) combos.push([cutters[i], cutters[j]]);
+        }
+      }
+      const ranked = CD.rank(
+        combos.map((enzymes) => ({
+          enzymes: enzymes,
+          bands: bandsOf(construct, enzymes).sizes,
+          referenceBands: parent ? bandsOf(parent, enzymes).sizes : undefined,
+        })),
+        { range: range }
+      );
+      const top = ranked.filter((r) => r.score > -50).slice(0, 12);
+      out.innerHTML = "";
+      if (!top.length) {
+        out.appendChild(U.callout("None of the common enzymes gives a digest worth running on this construct.", "warning"));
+        return;
+      }
+      out.appendChild(
+        U.table(
+          [
+            { title: "Cut with", render: (r) => r.enzymes.join(" + ") },
+            { title: "Clone", render: (r) => r.bands.map((b) => `${b}`).join(", ") + " bp" },
+            { title: "Parent", render: (r) => (r.referenceBands ? r.referenceBands.slice().sort((a, b) => b - a).join(", ") + " bp" : "\u2013") },
+            {
+              title: "Verdict",
+              render: (r) =>
+                h("span", { className: r.verdict === "clear" ? "" : "ove-cl-warn", title: r.reasons.join("; ") }, r.verdict),
+            },
+            { title: "Why", render: (r) => (r.reasons.length ? r.reasons.join("; ") : "bands are well spread and all on scale") },
+            {
+              title: "",
+              render: (r) =>
+                U.button("Show on gel", () => openGelSimulator({ template: construct, withEnzymes: r.enzymes.join(", ") }), { icon: "timeline-bar-chart" }),
+            },
+          ],
+          top
+        )
+      );
+    });
+    agarose.select.addEventListener("change", run);
+    pairsOn.input.addEventListener("change", run);
+    run();
+
+    U.openDialog({
+      title: "Check Digest (which cut proves the clone)",
+      width: 980,
+      body: [
+        templatePicker("Clone", "checkDigest", template),
+        U.section("Compare against", picker, parentBox),
+        U.section("Gel", U.row(U.field("Agarose", agarose.el), pairsOn.el)),
+        out,
+      ],
+    });
+  }
+
+  function openGelSimulator({ template, withEnzymes } = {}) {
     const { seqData } = current(template);
     const agarose = U.select(Object.keys(D.AGAROSE_RANGES).map((k) => ({ value: k, label: `${k}% agarose` })), "1", { width: 140 });
     const ladder = U.select(Object.keys(D.LADDERS), "GeneRuler 1 kb Plus", { width: 200 });
@@ -1566,11 +2412,17 @@
         return false;
       }
     });
-    const lanes = [
-      { source: 0, enzymes: "" },
-      ...(singles[0] ? [{ source: 0, enzymes: singles[0] }] : []),
-      ...(singles[1] ? [{ source: 0, enzymes: `${singles[0]}, ${singles[1]}` }] : []),
-    ];
+    // arriving from the check digest: show the uncut clone beside that cut
+    const lanes = withEnzymes
+      ? [
+          { source: 0, enzymes: "" },
+          { source: 0, enzymes: withEnzymes },
+        ]
+      : [
+          { source: 0, enzymes: "" },
+          ...(singles[0] ? [{ source: 0, enzymes: singles[0] }] : []),
+          ...(singles[1] ? [{ source: 0, enzymes: `${singles[0]}, ${singles[1]}` }] : []),
+        ];
     const lanesBox = h("div");
     const gelBox = h("div", { style: { display: "flex", gap: "16px", alignItems: "flex-start" } });
 
@@ -1751,6 +2603,10 @@
     restriction: openRestrictionCloning,
     gibson: openGibson,
     gel: openGelSimulator,
+    checkDigest: openCheckDigest,
+    enzymes: openEnzymeTable,
+    goldenGate: openGoldenGate,
+    cloneCheck: openCloneCheck,
     codons: openCodonTable,
   };
   function open(tool) {
@@ -1767,7 +2623,11 @@
       "--",
       { text: "Restriction Cloning (digest + ligate)…", icon: "cut", onClick: () => open("restriction") },
       { text: "Gibson / HiFi Assembly…", icon: "build", onClick: () => open("gibson") },
+      { text: "Golden Gate / MoClo Assembly…", icon: "layout-hierarchy", onClick: () => open("goldenGate") },
       "--",
+      { text: "Enzymes on the Map…", icon: "th-list", onClick: () => open("enzymes") },
+      { text: "Check Digest (which cut proves the clone)…", icon: "endorsed", onClick: () => open("checkDigest") },
+      { text: "Check a Clone Against Its Sanger Reads…", icon: "confirm", onClick: () => open("cloneCheck") },
       { text: "Agarose Gel Simulator…", icon: "timeline-bar-chart", onClick: () => open("gel") },
       { text: "Codon Usage Table…", icon: "th", onClick: () => open("codons") },
       "simulateDigestion",
