@@ -393,6 +393,9 @@
     if (trimTo != null && trimTo < seqObj.sequence.length) {
       seqObj.sequence = seqObj.sequence.slice(0, trimTo);
       if (chrom) chrom = trimChromatogramTo(chrom, trimTo);
+      // the toast that says so is gone in a few seconds, and the fact that
+      // this read is shorter than its file needs to outlast it
+      seqObj.name = `${seqObj.name || "Untitled"} (one turn)`;
     }
     if (hasRawTraces(chrom)) {
       chrom = { ...chrom, baseTraces: buildBaseTraces(chrom) };
