@@ -4,8 +4,6 @@ const aligner = require("../src/alignment/localAligner.js");
 
 describe("checking a clone against its reads", () => {
   describe("one read", () => {
-    //            0123456789
-    const ref = "--ACGTACGTACGT--";
     it("reports the stretch of reference it covers", () => {
       const r = C.readReport({ refAligned: "ACGTACGTACGT", readAligned: "--GTACGT----" });
       assert.strictEqual(r.start, 2);

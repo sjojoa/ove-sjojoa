@@ -2314,7 +2314,7 @@
   // the parent the same way, and rank by what you could actually read off a
   // gel (src/cloning/checkDigest.js does the scoring).
   function openCheckDigest({ template } = {}) {
-    const { seqData: construct, name } = current(template);
+    const { seqData: construct } = current(template);
     const CD = window.oveCheckDigest;
     const agarose = U.select(Object.keys(D.AGAROSE_RANGES).map((k) => ({ value: k, label: `${k}% agarose` })), "1", { width: 140 });
     const pairsOn = U.checkbox("also try pairs of enzymes", true);
